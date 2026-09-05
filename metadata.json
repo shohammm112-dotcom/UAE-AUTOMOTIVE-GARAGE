@@ -1,0 +1,6 @@
+{
+  "name": "UAE Automotive Garage Digital Platform",
+  "description": "Premium automotive garage digital platform connecting UAE motorists with transparent vehicle service, real-time repair tracking, estimates, approvals, and workshop domain management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,15 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // SEC-CRIT-03 HARDENING:
+    // The ROCD workshop platform enforces a strict Backend-for-Frontend (BFF) architecture.
+    // The browser client MUST NEVER communicate directly with Firestore.
+    // ALL data ingress, state transitions, financial arithmetic (integer fils),
+    // and authorization checks must pass exclusively through the Express API backend.
+    // Therefore, all direct client reads and writes are unconditionally denied.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

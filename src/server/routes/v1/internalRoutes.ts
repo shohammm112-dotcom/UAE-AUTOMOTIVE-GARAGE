@@ -1,0 +1,148 @@
+import { Router, Response } from 'express';
+import { AppContainer } from '../../../infrastructure/di/container.ts';
+import { AuthenticatedRequest, createAuthMiddleware } from '../../middleware/authMiddleware.ts';
+import { ValidationFailedError } from '../../../application/errors/ApplicationError.ts';
+import { JobStage } from '../../../domain/stateMachines/JobStateMachine.ts';
+import { PaymentMethod } from '../../../domain/entities/Invoice.ts';
+
+export function createInternalRoutes(container: AppContainer): Router {
+  const router = Router();
+  const authMiddleware = createAuthMiddleware(container);
+
+  // Workshop technical staff: technicians, mechanics, advisors, managers, admins
+  const workshopStaffGuard = authMiddleware.requireRole([
+    'admin',
+    'workshop_manager',
+    'service_advisor',
+    'advisor',
+    'technician',
+    'mechanic',
+  ]);
+
+  // Financial & Commercial staff: only advisors, workshop managers, and admins (SEC-STAFF-GRANULARITY)
+  const commercialStaffGuard = authMiddleware.requireRole([
+    'admin',
+    'workshop_manager',
+    'service_advisor',
+    'advisor',
+  ]);
+
+  /**
+   * POST /api/v1/internal/jobs/:id/stage
+   * Advances the workshop job stage.
+   */
+  router.post('/jobs/:id/stage', authMiddleware.requireAuth(), workshopStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const context = req.context!;
+      const { targetStage } = req.body;
+
+      if (!targetStage) {
+        throw new ValidationFailedError('targetStage is required');
+      }
+
+      const updatedJob = await container.services.jobService.advanceJobStage(
+        context,
+        req.params.id,
+        targetStage as JobStage
+      );
+
+      res.json({ job: updatedJob });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * POST /api/v1/internal/estimates
+   * Workshop staff creates a draft estimate through EstimateApplicationService (SEC-HIGH-04).
+   */
+  router.post('/estimates', authMiddleware.requireAuth(), commercialStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const context = req.context!;
+      const estimate = await container.services.estimateService.createDraftEstimate(context, req.body);
+
+      res.status(201).json({
+        estimate: {
+          id: estimate.id,
+          jobId: estimate.jobId,
+          customerId: estimate.customerId,
+          status: estimate.status,
+          subtotalFils: estimate.subtotalFils,
+          vatFils: estimate.vatFils,
+          totalFils: estimate.totalFils,
+          totalDisplay: estimate.totalDisplay,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * POST /api/v1/internal/estimates/:id/submit
+   * Submits draft estimate to customer for review and decision through EstimateApplicationService (SEC-HIGH-04).
+   */
+  router.post('/estimates/:id/submit', authMiddleware.requireAuth(), commercialStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const context = req.context!;
+      const estimate = await container.services.estimateService.submitEstimateToCustomer(context, req.params.id);
+
+      res.json({
+        estimate: {
+          id: estimate.id,
+          status: estimate.status,
+          isActionable: estimate.isActionable,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * POST /api/v1/internal/invoices/generate
+   * Generates authoritative invoice derived from ApprovalRecord.
+   */
+  router.post('/invoices/generate', authMiddleware.requireAuth(), commercialStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const context = req.context!;
+      const { approvalId } = req.body;
+
+      if (!approvalId) {
+        throw new ValidationFailedError('approvalId is required');
+      }
+
+      const invoice = await container.services.invoiceService.generateInvoiceFromApproval(context, approvalId);
+      res.status(201).json({ invoice });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * POST /api/v1/internal/invoices/:id/record-payment
+   * Records receipt of payment.
+   */
+  router.post('/invoices/:id/record-payment', authMiddleware.requireAuth(), commercialStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const context = req.context!;
+      const { paymentMethod } = req.body;
+
+      if (!paymentMethod) {
+        throw new ValidationFailedError('paymentMethod is required');
+      }
+
+      const invoice = await container.services.invoiceService.recordPayment(
+        context,
+        req.params.id,
+        paymentMethod as PaymentMethod
+      );
+
+      res.json({ invoice });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  return router;
+}
