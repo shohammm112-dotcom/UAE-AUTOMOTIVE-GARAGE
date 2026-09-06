@@ -37,6 +37,15 @@ export class JobStateMachine {
     return allowed.includes(target);
   }
 
+  /**
+   * Returns the legal next stages from the given stage. Authoritative source
+   * for UI action rendering; backend validation via assertTransition remains
+   * the actual security/consistency boundary regardless of what this returns.
+   */
+  public static getLegalNextStages(current: JobStage): JobStage[] {
+    return [...(this.LEGAL_TRANSITIONS[current] || [])];
+  }
+
   public static assertTransition(current: JobStage, target: JobStage): void {
     if (!this.canTransition(current, target)) {
       throw new InvalidStateTransitionError('Job', current, target);

@@ -3,24 +3,22 @@ import { Link } from "react-router-dom";
 import { useApi } from "@/lib/api/hooks";
 import { Wrench, FileText, Activity, AlertCircle, FileCheck, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { JobResponseDto, EstimateResponseDto, InvoiceResponseDto } from "@/application/dto/AppDtos";
+import { JobResponseDto, EstimateResponseDto } from "@/application/dto/AppDtos";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const StaffDashboardPage: React.FC = () => {
   const { data: jobsData, isLoading: isLoadingJobs } = useApi<{ jobs: JobResponseDto[] }>("/internal/jobs");
   const { data: estimatesData, isLoading: isLoadingEstimates } = useApi<{ estimates: EstimateResponseDto[] }>("/internal/estimates");
-  const { data: invoicesData, isLoading: isLoadingInvoices } = useApi<{ invoices: InvoiceResponseDto[] }>("/internal/invoices");
 
   const jobs = jobsData?.jobs || [];
   const estimates = estimatesData?.estimates || [];
-  const invoices = invoicesData?.invoices || [];
 
   const activeJobs = jobs.filter(j => j.stage !== 'delivered');
-  const awaitingInspection = jobs.filter(j => j.stage === 'intake' || j.stage === 'inspection');
-  const pendingApprovals = estimates.filter(e => e.status === 'draft' || e.status === 'sent');
-  const readyForDelivery = jobs.filter(j => j.stage === 'qc' || j.stage === 'ready_for_delivery');
+  const awaitingInspection = jobs.filter(j => j.stage === 'intake_checkin' || j.stage === 'inspection_in_progress');
+  const pendingApprovals = estimates.filter(e => e.status === 'pending_customer_decision');
+  const readyForDelivery = jobs.filter(j => j.stage === 'ready_for_delivery');
 
-  const isLoading = isLoadingJobs || isLoadingEstimates || isLoadingInvoices;
+  const isLoading = isLoadingJobs || isLoadingEstimates;
 
   if (isLoading) {
     return (

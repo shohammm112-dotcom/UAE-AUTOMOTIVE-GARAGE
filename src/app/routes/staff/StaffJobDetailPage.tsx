@@ -8,26 +8,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth/AuthProvider";
-
-const STAGES = [
-  "intake_checkin",
-  "inspection_in_progress",
-  "estimate_pending",
-  "repair_in_progress",
-  "quality_control",
-  "ready_for_delivery",
-  "delivered"
-];
-
-const LEGAL_TRANSITIONS: Record<string, string[]> = {
-  intake_checkin: ['inspection_in_progress'],
-  inspection_in_progress: ['estimate_pending'],
-  estimate_pending: ['repair_in_progress', 'ready_for_delivery'],
-  repair_in_progress: ['quality_control'],
-  quality_control: ['repair_in_progress', 'ready_for_delivery'],
-  ready_for_delivery: ['delivered'],
-  delivered: [],
-};
+import { ORDERED_JOB_STAGES, JobStateMachine } from "@/domain/stateMachines/JobStateMachine.ts";
 
 export const StaffJobDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -63,7 +44,7 @@ export const StaffJobDetailPage: React.FC = () => {
   const job = data?.job;
   if (!job) return null;
 
-  const currentStageIndex = STAGES.indexOf(job.stage);
+  const currentStageIndex = ORDERED_JOB_STAGES.indexOf(job.stage);
   
   const canAdvanceJob = hasRole('advisor') || hasRole('service_advisor') || hasRole('technician') || hasRole('mechanic') || hasRole('workshop_manager') || hasRole('admin');
 
@@ -81,7 +62,7 @@ export const StaffJobDetailPage: React.FC = () => {
     }
   };
 
-  const availableNextStages = LEGAL_TRANSITIONS[job.stage] || [];
+  const availableNextStages = JobStateMachine.getLegalNextStages(job.stage);
 
   return (
     <div className="space-y-6">
@@ -149,7 +130,7 @@ export const StaffJobDetailPage: React.FC = () => {
             </div>
 
             <div className="relative border-l-2 border-zinc-200 ml-4 space-y-8 pb-4">
-              {STAGES.map((stage, index) => {
+              {ORDERED_JOB_STAGES.map((stage, index) => {
                 const isCompleted = index < currentStageIndex;
                 const isCurrent = index === currentStageIndex;
                 
