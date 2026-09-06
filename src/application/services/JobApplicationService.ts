@@ -23,6 +23,12 @@ export class JobApplicationService {
     return jobs.map((j) => this.toDto(j));
   }
 
+  public async getAllJobs(context: AuthenticatedContext): Promise<JobResponseDto[]> {
+    AuthorizationGuard.assertStaffRole(context, ["admin", "workshop_manager", "service_advisor", "advisor", "technician", "mechanic"]);
+    const jobs = await this.jobRepo.listAll();
+    return jobs.map((j) => this.toDto(j));
+  }
+
   public async listJobsForCustomerByStaff(context: AuthenticatedContext, customerId: string): Promise<JobResponseDto[]> {
     AuthorizationGuard.assertStaffRole(context, ["admin", "workshop_manager", "service_advisor", "advisor", "technician", "mechanic"]);
     const jobs = await this.jobRepo.findByCustomerId(customerId);
@@ -47,6 +53,15 @@ export class JobApplicationService {
     return this.toDto(job);
   }
 
+  public async getJobDetailsForStaff(context: AuthenticatedContext, jobId: string): Promise<JobResponseDto> {
+    AuthorizationGuard.assertStaffRole(context, ["admin", "workshop_manager", "service_advisor", "advisor", "technician", "mechanic"]);
+    const job = await this.jobRepo.findById(jobId);
+    if (!job) {
+      throw new ResourceNotFoundError('Job', jobId);
+    }
+    return this.toDto(job);
+  }
+
   /**
    * Advances the job stage.
    * Gated strictly to authorized staff roles.
@@ -56,7 +71,14 @@ export class JobApplicationService {
     jobId: string,
     targetStage: JobStage
   ): Promise<JobResponseDto> {
-    AuthorizationGuard.assertStaffRole(context, ['advisor', 'technician', 'workshop_manager', 'admin']);
+    AuthorizationGuard.assertStaffRole(context, [
+      'admin',
+      'workshop_manager',
+      'service_advisor',
+      'advisor',
+      'technician',
+      'mechanic'
+    ]);
 
     const job = await this.jobRepo.findById(jobId);
     if (!job) {

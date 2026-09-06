@@ -4,27 +4,36 @@ import { useApi } from "@/lib/api/hooks";
 import { ApiClient } from "@/lib/api/client";
 import { 
   Wrench, CheckCircle2, Clock, AlertCircle, ArrowLeft, 
-  CarFront, User, Calendar, Activity, ChevronRight
+  CarFront, User, Calendar, Activity, ChevronRight, FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth/AuthProvider";
 
 const STAGES = [
   "intake_checkin",
-  "inspection",
+  "inspection_in_progress",
   "estimate_pending",
-  "estimate_approved",
-  "in_repair",
+  "repair_in_progress",
   "quality_control",
   "ready_for_delivery",
   "delivered"
 ];
 
+const LEGAL_TRANSITIONS: Record<string, string[]> = {
+  intake_checkin: ['inspection_in_progress'],
+  inspection_in_progress: ['estimate_pending'],
+  estimate_pending: ['repair_in_progress', 'ready_for_delivery'],
+  repair_in_progress: ['quality_control'],
+  quality_control: ['repair_in_progress', 'ready_for_delivery'],
+  ready_for_delivery: ['delivered'],
+  delivered: [],
+};
+
 export const StaffJobDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { user, hasRole } = useAuth();
   
-  const { data, isLoading, error, refetch } = useApi<{ job: any }>(`/jobs/${id}`);
+  const { data, isLoading, error, refetch } = useApi<{ job: any }>(`/internal/jobs/${id}`);
   
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [advanceError, setAdvanceError] = useState("");
@@ -38,25 +47,24 @@ export const StaffJobDetailPage: React.FC = () => {
     );
   }
 
-  if (error || !data?.job) {
+  if (error) {
     return (
-      <div className="bg-red-50 text-red-800 p-6 rounded-xl border border-red-200 flex flex-col items-center justify-center text-center">
-        <AlertCircle className="w-8 h-8 mb-4 text-red-500" />
-        <h3 className="text-lg font-bold mb-2">Failed to load Job</h3>
-        <p className="mb-4">{error?.message || "Job not found"}</p>
-        <Link to="/staff/jobs">
-          <Button variant="outline">Back to Queue</Button>
+      <div className="bg-red-50 text-red-800 p-6 rounded-xl border border-red-200 flex flex-col items-center justify-center min-h-[300px]">
+        <AlertCircle className="w-10 h-10 mb-4 text-red-500" />
+        <h2 className="text-xl font-bold mb-2">Error Loading Job</h2>
+        <p>{error.message}</p>
+        <Link to="/staff/jobs" className="mt-6">
+          <Button variant="outline" className="bg-white">Back to Jobs</Button>
         </Link>
       </div>
     );
   }
 
-  const job = data.job;
-  const currentStageIndex = STAGES.indexOf(job.stage);
+  const job = data?.job;
+  if (!job) return null;
 
-  // Check if current staff can advance the stage. 
-  // Any internal role can advance it technically per the API (advisor, technician, mechanic, admin, manager).
-  // But we want to ensure we don't accidentally expose it to customer logic.
+  const currentStageIndex = STAGES.indexOf(job.stage);
+  
   const canAdvanceJob = hasRole('advisor') || hasRole('service_advisor') || hasRole('technician') || hasRole('mechanic') || hasRole('workshop_manager') || hasRole('admin');
 
   const advanceJobStage = async (targetStage: string) => {
@@ -72,6 +80,8 @@ export const StaffJobDetailPage: React.FC = () => {
       setIsAdvancing(false);
     }
   };
+
+  const availableNextStages = LEGAL_TRANSITIONS[job.stage] || [];
 
   return (
     <div className="space-y-6">
@@ -100,34 +110,44 @@ export const StaffJobDetailPage: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Job Details */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-zinc-100 bg-zinc-50 font-semibold text-zinc-900 flex items-center gap-2">
-              <Activity className="w-4 h-4 text-zinc-500" />
-              Service Information
-            </div>
-            <div className="p-6">
-              <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                <div>
-                  <dt className="text-sm font-medium text-zinc-500 mb-1">Customer Concern</dt>
-                  <dd className="text-sm text-zinc-900 bg-zinc-50 p-3 rounded-md border border-zinc-100">{job.customerConcern}</dd>
-                </div>
-                <div>
-                  <dt className="text-sm font-medium text-zinc-500 mb-1">Diagnostic Summary</dt>
-                  <dd className="text-sm text-zinc-900 bg-zinc-50 p-3 rounded-md border border-zinc-100">
-                    {job.diagnosticSummary || <span className="italic text-zinc-400">Pending inspection</span>}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          </div>
-
           <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-6">
             <h3 className="font-semibold mb-6 flex items-center">
               <Activity className="w-4 h-4 mr-2" />
-              Workflow Progress
+              Workshop Execution Workbench
             </h3>
+            
+            <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-lg mb-8">
+               <h4 className="text-sm font-medium text-zinc-500 mb-4 uppercase tracking-wider">Next Operational Actions</h4>
+               {canAdvanceJob ? (
+                  availableNextStages.length > 0 ? (
+                    <div className="flex flex-wrap gap-3">
+                      {availableNextStages.map(stage => (
+                        <Button 
+                          key={stage}
+                          onClick={() => advanceJobStage(stage)}
+                          disabled={isAdvancing}
+                          variant={stage.includes('repair') || stage.includes('delivery') ? 'default' : 'outline'}
+                        >
+                          {isAdvancing ? "Updating..." : (
+                            <>Move to {stage.replace(/_/g, ' ')} <ChevronRight className="w-4 h-4 ml-1" /></>
+                          )}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-zinc-500 flex items-center">
+                       <CheckCircle2 className="w-4 h-4 mr-2 text-green-500" />
+                       This job has reached its terminal stage.
+                    </div>
+                  )
+               ) : (
+                  <div className="text-sm text-zinc-500">
+                    You do not have permission to advance job stages.
+                  </div>
+               )}
+            </div>
+
             <div className="relative border-l-2 border-zinc-200 ml-4 space-y-8 pb-4">
               {STAGES.map((stage, index) => {
                 const isCompleted = index < currentStageIndex;
@@ -148,28 +168,35 @@ export const StaffJobDetailPage: React.FC = () => {
                           {stage.replace(/_/g, ' ')}
                         </p>
                       </div>
-                      
-                      {isCurrent && canAdvanceJob && index < STAGES.length - 1 && (
-                        <Button 
-                          size="sm" 
-                          onClick={() => advanceJobStage(STAGES[index + 1])}
-                          disabled={isAdvancing}
-                          className="ml-4"
-                        >
-                          {isAdvancing ? "Updating..." : (
-                            <>Advance to {STAGES[index + 1].replace(/_/g, ' ')} <ChevronRight className="w-4 h-4 ml-1" /></>
-                          )}
-                        </Button>
-                      )}
                     </div>
                   </div>
                 );
               })}
             </div>
           </div>
+
+          <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-zinc-100 bg-zinc-50 font-semibold text-zinc-900 flex items-center gap-2">
+              <Activity className="w-4 h-4 text-zinc-500" />
+              Service Information
+            </div>
+            <div className="p-6">
+              <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                <div>
+                  <dt className="text-sm font-medium text-zinc-500 mb-1">Customer Concern</dt>
+                  <dd className="text-sm text-zinc-900 bg-zinc-50 p-3 rounded-md border border-zinc-100">{job.customerConcern}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-zinc-500 mb-1">Diagnostic Summary</dt>
+                  <dd className="text-sm text-zinc-900 bg-zinc-50 p-3 rounded-md border border-zinc-100">
+                    {job.diagnosticSummary || <span className="italic text-zinc-400">Pending inspection</span>}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
         </div>
         
-        {/* Right Column: Context & Metadata */}
         <div className="space-y-6">
           <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50 font-semibold text-zinc-900 flex items-center gap-2">
@@ -179,7 +206,9 @@ export const StaffJobDetailPage: React.FC = () => {
             <div className="p-5 space-y-4">
               <div>
                 <dt className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Vehicle ID</dt>
-                <dd className="text-sm font-mono text-zinc-900">{job.vehicleId}</dd>
+                <dd className="text-sm font-mono text-blue-600 hover:underline">
+                   <Link to={`/staff/vehicles/${job.vehicleId}`}>{job.vehicleId}</Link>
+                </dd>
               </div>
               <div>
                 <dt className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Mileage</dt>
@@ -196,7 +225,9 @@ export const StaffJobDetailPage: React.FC = () => {
             <div className="p-5 space-y-4">
               <div>
                 <dt className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Customer ID</dt>
-                <dd className="text-sm font-mono text-zinc-900">{job.customerId}</dd>
+                <dd className="text-sm font-mono text-blue-600 hover:underline">
+                   <Link to={`/staff/customers/${job.customerId}`}>{job.customerId}</Link>
+                </dd>
               </div>
               <div>
                 <dt className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Service Advisor</dt>
@@ -204,19 +235,27 @@ export const StaffJobDetailPage: React.FC = () => {
               </div>
               <div>
                 <dt className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Lead Technician</dt>
-                <dd className="text-sm text-zinc-900">{job.assignedTechnician || 'Unassigned'}</dd>
+                <dd className="text-sm text-zinc-900">
+                  {job.assignedTechnician || 'Unassigned'}
+                  <div className="text-xs text-zinc-400 mt-1 italic">Technician assignment mutation infrastructure deferred</div>
+                </dd>
               </div>
             </div>
           </div>
 
-          <div className="bg-blue-50 rounded-xl border border-blue-100 p-5">
-             <h3 className="font-semibold text-blue-900 flex items-center text-sm mb-2">
-              <AlertCircle className="w-4 h-4 mr-2" />
-              Estimates API Gap
-            </h3>
-            <p className="text-sm text-blue-800">
-              The <code>JobResponseDto</code> does not currently expose an <code>estimateId</code>. To view or create an estimate for this job, you must navigate to Estimates and link it manually (once that UI is fully built).
-            </p>
+          <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50 font-semibold text-zinc-900 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-zinc-500" />
+              Related Estimates
+            </div>
+            <div className="p-5">
+              <p className="text-sm text-zinc-500">
+                To view estimates associated with this job, navigate to the Estimates portal.
+              </p>
+              <Link to={`/staff/estimates`}>
+                 <Button variant="outline" size="sm" className="mt-3 w-full">Go to Estimates</Button>
+              </Link>
+            </div>
           </div>
         </div>
       </div>

@@ -38,6 +38,10 @@ export class MockInvoiceRepository implements IInvoiceRepository {
     return null;
   }
 
+  public async listAll(): Promise<Invoice[]> {
+    return Array.from(this.store.values()).sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime());
+  }
+
   public async save(invoice: Invoice): Promise<void> {
     const existingId = this.approvalToInvoiceId.get(invoice.approvalId);
     if (existingId && existingId !== invoice.id) {

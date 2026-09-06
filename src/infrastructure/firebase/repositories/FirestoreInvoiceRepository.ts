@@ -37,6 +37,11 @@ export class FirestoreInvoiceRepository implements IInvoiceRepository {
     return InvoiceFirestoreMapper.toDomain(snapshot.docs[0].data() as InvoiceFirestoreDocument);
   }
 
+  public async listAll(): Promise<Invoice[]> {
+    const snapshot = await this.collection.get();
+    return snapshot.docs.map((doc) => InvoiceFirestoreMapper.toDomain(doc.data() as InvoiceFirestoreDocument));
+  }
+
   public async save(invoice: Invoice): Promise<void> {
     const db = this.client.getDb();
     await db.runTransaction(async (transaction) => {

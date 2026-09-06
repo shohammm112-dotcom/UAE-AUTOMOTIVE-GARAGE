@@ -37,6 +37,11 @@ export class FirestoreEstimateRepository implements IEstimateRepository {
     return snapshot.docs.map((doc) => EstimateFirestoreMapper.toDomain(doc.data() as EstimateFirestoreDocument));
   }
 
+  public async listAll(): Promise<Estimate[]> {
+    const snapshot = await this.collection.get();
+    return snapshot.docs.map((doc) => EstimateFirestoreMapper.toDomain(doc.data() as EstimateFirestoreDocument));
+  }
+
   public async save(estimate: Estimate): Promise<void> {
     const docData = EstimateFirestoreMapper.toDocument(estimate);
     await this.collection.doc(estimate.id).set(docData);

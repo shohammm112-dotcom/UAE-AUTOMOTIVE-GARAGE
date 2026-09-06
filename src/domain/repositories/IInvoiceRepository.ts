@@ -6,6 +6,7 @@ export interface IInvoiceRepository {
   findByJobId(jobId: JobId): Promise<Invoice | null>;
   findByCustomerId(customerId: CustomerId): Promise<Invoice[]>;
   findByApprovalId(approvalId: ApprovalId): Promise<Invoice | null>;
+  listAll(): Promise<Invoice[]>;
   save(invoice: Invoice): Promise<void>;
   update(invoice: Invoice): Promise<void>;
 }

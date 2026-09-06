@@ -49,6 +49,12 @@ export class EstimateApplicationService {
     return this.toDto(estimate);
   }
 
+  public async getAllEstimates(context: AuthenticatedContext): Promise<EstimateResponseDto[]> {
+    AuthorizationGuard.assertStaffRole(context, ["admin", "workshop_manager", "service_advisor", "advisor", "technician", "mechanic"]);
+    const estimates = await this.estimateRepo.listAll();
+    return estimates.map((e) => this.toDto(e));
+  }
+
   /**
    * Creates a draft estimate through the application service layer (SEC-HIGH-04 remediation).
    * Enforces staff authorization and validates job association.

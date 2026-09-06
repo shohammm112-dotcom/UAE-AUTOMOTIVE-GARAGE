@@ -27,6 +27,12 @@ export class InvoiceApplicationService {
     return invoices.map((inv) => this.toDto(inv));
   }
 
+  public async getAllInvoices(context: AuthenticatedContext): Promise<InvoiceResponseDto[]> {
+    AuthorizationGuard.assertStaffRole(context, ["admin", "workshop_manager", "service_advisor", "advisor", "technician", "mechanic"]);
+    const invoices = await this.invoiceRepo.listAll();
+    return invoices.map((inv) => this.toDto(inv));
+  }
+
   public async getInvoiceById(
     context: AuthenticatedContext,
     invoiceId: string

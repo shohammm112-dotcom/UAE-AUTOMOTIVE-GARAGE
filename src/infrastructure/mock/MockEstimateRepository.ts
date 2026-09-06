@@ -34,6 +34,10 @@ export class MockEstimateRepository implements IEstimateRepository {
     return results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
+  public async listAll(): Promise<Estimate[]> {
+    return Array.from(this.store.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
   public async save(estimate: Estimate): Promise<void> {
     this.store.set(estimate.id, estimate);
   }

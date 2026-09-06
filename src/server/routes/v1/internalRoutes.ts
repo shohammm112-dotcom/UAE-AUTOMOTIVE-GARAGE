@@ -146,6 +146,54 @@ export function createInternalRoutes(container: AppContainer): Router {
 
   
   /**
+   * GET /api/v1/internal/jobs
+   */
+  router.get('/jobs', authMiddleware.requireAuth(), workshopStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const jobs = await container.services.jobService.getAllJobs(req.context!);
+      res.json({ jobs });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * GET /api/v1/internal/jobs/:id
+   */
+  router.get('/jobs/:id', authMiddleware.requireAuth(), workshopStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const job = await container.services.jobService.getJobDetailsForStaff(req.context!, req.params.id);
+      res.json({ job });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * GET /api/v1/internal/estimates
+   */
+  router.get('/estimates', authMiddleware.requireAuth(), workshopStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const estimates = await container.services.estimateService.getAllEstimates(req.context!);
+      res.json({ estimates });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * GET /api/v1/internal/invoices
+   */
+  router.get('/invoices', authMiddleware.requireAuth(), workshopStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const invoices = await container.services.invoiceService.getAllInvoices(req.context!);
+      res.json({ invoices });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
    * GET /api/v1/internal/customers
    */
   router.get('/customers', authMiddleware.requireAuth(), workshopStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {

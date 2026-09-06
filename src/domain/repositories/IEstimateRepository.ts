@@ -6,6 +6,7 @@ export interface IEstimateRepository {
   findByJobId(jobId: JobId): Promise<Estimate[]>;
   findLatestByJobId(jobId: JobId): Promise<Estimate | null>;
   findByCustomerId(customerId: CustomerId): Promise<Estimate[]>;
+  listAll(): Promise<Estimate[]>;
   save(estimate: Estimate): Promise<void>;
   update(estimate: Estimate): Promise<void>;
 }
