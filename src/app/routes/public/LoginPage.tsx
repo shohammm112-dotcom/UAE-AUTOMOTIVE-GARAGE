@@ -1,17 +1,27 @@
 import React, { useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Lock, ArrowRight, ShieldCheck, FileCheck, History } from "lucide-react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Lock, ArrowRight, ShieldCheck, FileCheck, History, Wrench } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 
 export const LoginPage: React.FC = () => {
-  const { loginWithMockDevToken, isLoading, isAuthenticated } = useAuth();
+  const { loginWithMockDevToken, loginWithStaffDevToken, isLoading, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate("/portal", { replace: true });
+    if (isAuthenticated && user) {
+      const isStaff = user.roles.some(r => ['admin', 'workshop_manager', 'advisor', 'service_advisor', 'technician', 'mechanic'].includes(r));
+      
+      // If there's a redirect URL in state, use it (unless it's a staff trying to access customer portal or vice versa)
+      const from = (location.state as any)?.from?.pathname;
+      
+      if (isStaff) {
+        navigate(from?.startsWith('/staff') ? from : "/staff", { replace: true });
+      } else {
+        navigate(from?.startsWith('/portal') ? from : "/portal", { replace: true });
+      }
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, user, navigate, location]);
 
   return (
     <div className="flex flex-col md:flex-row min-h-[calc(100vh-80px)]">
@@ -67,14 +77,11 @@ export const LoginPage: React.FC = () => {
               <Lock className="w-8 h-8 text-zinc-900" />
             </div>
             <h2 className="text-3xl font-bold tracking-tight mb-2">Sign In</h2>
-            <p className="text-zinc-500">Access your customer portal</p>
+            <p className="text-zinc-500">Access your digital portal</p>
           </div>
 
-          <div className="p-6 bg-blue-50 border border-blue-100 rounded-xl mb-8">
-            <h4 className="font-semibold text-blue-900 mb-2">Development Mode</h4>
-            <p className="text-sm text-blue-800 mb-4">
-              Live authentication (Firebase/Supabase) is deferred to the Antigravity phase. Click below to enter the portal using a verified mock customer session.
-            </p>
+          <div className="p-6 bg-blue-50 border border-blue-100 rounded-xl mb-6">
+            <h4 className="font-semibold text-blue-900 mb-2">Customer Login (Dev Mode)</h4>
             <button
               onClick={loginWithMockDevToken}
               disabled={isLoading}
@@ -83,6 +90,29 @@ export const LoginPage: React.FC = () => {
               {isLoading ? "Authenticating..." : "Login as Mock Customer"}
               {!isLoading && <ArrowRight className="w-4 h-4" />}
             </button>
+          </div>
+          
+          <div className="p-6 bg-zinc-50 border border-zinc-200 rounded-xl mb-8">
+            <h4 className="font-semibold text-zinc-900 mb-2 flex items-center gap-2">
+              <Wrench className="w-4 h-4" />
+              Staff Login (Dev Mode)
+            </h4>
+            <div className="space-y-3">
+              <button
+                onClick={() => loginWithStaffDevToken("advisor")}
+                disabled={isLoading}
+                className="w-full h-10 bg-zinc-800 hover:bg-zinc-900 text-white text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                Login as Service Advisor
+              </button>
+              <button
+                onClick={() => loginWithStaffDevToken("manager")}
+                disabled={isLoading}
+                className="w-full h-10 bg-zinc-800 hover:bg-zinc-900 text-white text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                Login as Workshop Manager
+              </button>
+            </div>
           </div>
           
           <div className="text-center">

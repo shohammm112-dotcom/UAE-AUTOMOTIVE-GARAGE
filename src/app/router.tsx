@@ -1,6 +1,8 @@
 import { createBrowserRouter, Navigate, Link } from "react-router-dom";
 import { PublicShell } from "@/components/layout/PublicShell";
 import { AppShell } from "@/components/layout/AppShell";
+import { StaffShell } from "@/components/layout/StaffShell";
+
 import { HomePage } from "./routes/public/HomePage";
 import { ServicesPage } from "./routes/public/ServicesPage";
 import { ContactPage } from "./routes/public/ContactPage";
@@ -21,6 +23,12 @@ import { EstimateDetailPage } from "./routes/portal/EstimateDetailPage";
 import { ProfilePage } from "./routes/portal/ProfilePage";
 import { NotificationsPage } from "./routes/portal/NotificationsPage";
 import { ServiceHistoryPage } from "./routes/portal/ServiceHistoryPage";
+
+// Staff Pages
+import { StaffDashboardPage } from "./routes/staff/StaffDashboardPage";
+import { StaffJobsPage } from "./routes/staff/StaffJobsPage";
+import { StaffJobDetailPage } from "./routes/staff/StaffJobDetailPage";
+import { StaffEstimatesPage } from "./routes/staff/StaffEstimatesPage";
 
 export const router = createBrowserRouter([
   {
@@ -54,6 +62,17 @@ export const router = createBrowserRouter([
       { path: "profile", element: <ProfilePage /> },
       { path: "notifications", element: <NotificationsPage /> },
       { path: "history", element: <ServiceHistoryPage /> },
+    ],
+  },
+  {
+    path: "/staff",
+    element: <StaffShell />,
+    children: [
+      { index: true, element: <Navigate to="/staff/dashboard" replace /> },
+      { path: "dashboard", element: <StaffDashboardPage /> },
+      { path: "jobs", element: <StaffJobsPage /> },
+      { path: "jobs/:id", element: <StaffJobDetailPage /> },
+      { path: "estimates", element: <StaffEstimatesPage /> },
     ],
   },
   {

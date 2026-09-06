@@ -8,7 +8,9 @@ interface AuthContextValue {
   isLoading: boolean;
   user: AuthContextDto | null;
   loginWithMockDevToken: () => Promise<void>;
+  loginWithStaffDevToken: (role: "advisor" | "manager") => Promise<void>;
   logout: () => void;
+  hasRole: (role: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -55,10 +57,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await fetchProfile();
   };
 
+  const loginWithStaffDevToken = async (role: "advisor" | "manager") => {
+    setIsLoading(true);
+    const mockToken = role === "manager" ? "test-token-staff-manager" : "test-token-staff-advisor";
+    TokenProvider.setToken(mockToken);
+    localStorage.setItem("dev_auth_token", mockToken);
+    
+    await fetchProfile();
+  };
+
   const logout = () => {
     TokenProvider.setToken(null);
     localStorage.removeItem("dev_auth_token");
     setUser(null);
+  };
+
+  const hasRole = (role: string) => {
+    if (!user) return false;
+    return user.roles.includes(role);
   };
 
   return (
@@ -68,7 +84,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         user,
         loginWithMockDevToken,
+        loginWithStaffDevToken,
         logout,
+        hasRole,
       }}
     >
       {children}
@@ -83,3 +101,4 @@ export const useAuth = () => {
   }
   return context;
 };
+
