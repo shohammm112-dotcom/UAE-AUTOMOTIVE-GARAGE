@@ -1,3 +1,5 @@
+import type { JobStage } from "@/domain/stateMachines/JobStateMachine.ts";
+
 export interface CustomerResponseDto {
   id: string;
   fullName: string;
@@ -36,7 +38,7 @@ export interface JobResponseDto {
   id: string;
   customerId: string;
   vehicleId: string;
-  stage: 'received' | 'inspecting' | 'estimating' | 'awaiting_approval' | 'in_progress' | 'qc' | 'ready' | 'delivered';
+  stage: JobStage;
   customerConcern: string;
   diagnosticSummary?: string;
   mileageAtIntake: number;

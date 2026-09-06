@@ -88,7 +88,7 @@ export const StaffJobsPage: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <span className="text-zinc-500">Stage:</span>
                       <Badge variant={job.stage === 'delivered' ? 'default' : 'secondary'} className="capitalize">
-                        {job.stage.replace('_', ' ')}
+                        {job.stage.replace(/_/g, ' ')}
                       </Badge>
                     </div>
                     {job.estimatedCompletionAt && (

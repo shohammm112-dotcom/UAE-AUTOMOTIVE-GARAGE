@@ -61,11 +61,10 @@ export const ServiceHistoryPage: React.FC = () => {
                 <div className="flex items-center gap-3 mb-2">
                   <h3 className="font-semibold text-zinc-900 text-lg">Job #{job.id.substring(0, 8)}</h3>
                   <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium uppercase ${
-                    job.stage === 'delivered' ? 'bg-green-100 text-green-700' : 
-                    job.stage === 'cancelled' ? 'bg-red-100 text-red-700' :
+                    job.stage === 'delivered' ? 'bg-green-100 text-green-700' :
                     'bg-blue-100 text-blue-700'
                   }`}>
-                    {job.stage}
+                    {job.stage.replace(/_/g, ' ')}
                   </span>
                 </div>
                 

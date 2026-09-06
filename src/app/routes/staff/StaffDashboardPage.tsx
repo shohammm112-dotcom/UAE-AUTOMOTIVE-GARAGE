@@ -111,7 +111,7 @@ export const StaffDashboardPage: React.FC = () => {
                     <Link to={`/staff/jobs/${job.id}`} className="flex justify-between items-center">
                       <div>
                         <p className="font-medium text-zinc-900">Job {job.id.substring(0, 8)}</p>
-                        <p className="text-xs text-zinc-500 mt-0.5 capitalize">{job.stage.replace('_', ' ')}</p>
+                        <p className="text-xs text-zinc-500 mt-0.5 capitalize">{job.stage.replace(/_/g, ' ')}</p>
                       </div>
                       <Button variant="ghost" size="sm">View</Button>
                     </Link>

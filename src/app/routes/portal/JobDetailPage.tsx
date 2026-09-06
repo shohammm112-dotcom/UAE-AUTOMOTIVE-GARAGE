@@ -1,20 +1,10 @@
 import React from "react";
 import { useParams, Link } from "react-router-dom";
 import { useApi } from "@/lib/api/hooks";
-import { Wrench, CheckCircle2, Clock, AlertCircle, ArrowLeft, FileText, ClipboardList } from "lucide-react";
+import { Wrench, CheckCircle2, Clock, AlertCircle, ArrowLeft, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DocumentDownloadButton } from "@/components/DocumentDownloadButton";
-
-const STAGES = [
-  "intake_checkin",
-  "inspection",
-  "estimate_pending",
-  "approved",
-  "in_progress",
-  "qc_testing",
-  "ready_for_delivery",
-  "delivered"
-];
+import { ORDERED_JOB_STAGES, JobStateMachine } from "@/domain/stateMachines/JobStateMachine.ts";
 
 export const JobDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -39,8 +29,7 @@ export const JobDetailPage: React.FC = () => {
   }
 
   const job = data.job;
-  const currentStageIndex = STAGES.indexOf(job.stage);
-  const hasInspection = currentStageIndex >= STAGES.indexOf("estimate_pending");
+  const currentStageIndex = JobStateMachine.getStageIndex(job.stage);
 
   return (
     <div className="space-y-6">
@@ -59,7 +48,7 @@ export const JobDetailPage: React.FC = () => {
         <div className="relative">
           <div className="absolute top-0 bottom-0 left-[15px] w-0.5 bg-zinc-100"></div>
           <div className="space-y-6 relative">
-            {STAGES.map((stage, index) => {
+            {ORDERED_JOB_STAGES.map((stage, index) => {
               const isCompleted = index < currentStageIndex;
               const isCurrent = index === currentStageIndex;
               
@@ -122,24 +111,18 @@ export const JobDetailPage: React.FC = () => {
           </h3>
           
           <div className="space-y-4 flex-1">
-            {hasInspection && (
-              <div className="p-4 border border-zinc-200 rounded-lg flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-                    <ClipboardList className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">Inspection Report</p>
-                    <p className="text-xs text-zinc-500">Digital multipoint inspection</p>
-                  </div>
-                </div>
-                <DocumentDownloadButton 
-                  parentResourceType="inspection"
-                  parentResourceId={job.id}
-                  documentKey="multipoint-report"
-                />
-              </div>
-            )}
+            {/*
+              Inspection report download is intentionally not rendered.
+              The control could never succeed: it passed `job.id` as
+              `parentResourceId` while DocumentAccessApplicationService resolves
+              that id via inspectionRepo.findById (an InspectionReportId), and it
+              hardcoded documentKey="multipoint-report", which must instead be a
+              member of inspection.findings[].mediaStorageKeys.
+              To restore it, GET /api/v1/jobs/:id must first expose the job's
+              inspection report id and its available media keys
+              (IInspectionRepository.findByJobId already exists but is not
+              reachable from any HTTP route).
+            */}
 
             <div className="p-4 border border-zinc-200 rounded-lg">
               <p className="text-sm text-zinc-600 mb-3">

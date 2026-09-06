@@ -177,7 +177,7 @@ export const StaffVehicleDetailPage: React.FC = () => {
                       <div className="flex items-center justify-between p-4 border border-zinc-100 rounded-lg hover:bg-zinc-50 transition-colors">
                         <div>
                           <div className="flex items-center gap-3 mb-2">
-                            <Badge variant="outline" className="text-xs uppercase bg-white">{job.stage}</Badge>
+                            <Badge variant="outline" className="text-xs uppercase bg-white">{job.stage.replace(/_/g, ' ')}</Badge>
                             <span className="text-xs text-zinc-500 flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
                               {new Date(job.createdAt).toLocaleDateString()}

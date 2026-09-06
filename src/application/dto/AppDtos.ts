@@ -1,3 +1,5 @@
+import type { JobStage } from "../../domain/stateMachines/JobStateMachine.ts";
+
 export interface CustomerResponseDto {
   readonly id: string;
   readonly fullName: string;
@@ -135,7 +137,7 @@ export interface JobResponseDto {
   readonly id: string;
   readonly customerId: string;
   readonly vehicleId: string;
-  readonly stage: string;
+  readonly stage: JobStage;
   readonly serviceAdvisorName: string;
   readonly assignedTechnician?: string;
   readonly customerConcern: string;

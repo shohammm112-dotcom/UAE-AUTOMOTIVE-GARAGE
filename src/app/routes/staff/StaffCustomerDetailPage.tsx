@@ -171,7 +171,7 @@ export const StaffCustomerDetailPage: React.FC = () => {
                         <div className="flex items-center justify-between p-3 border border-zinc-100 rounded-lg hover:bg-zinc-50 transition-colors">
                           <div>
                             <div className="flex items-center gap-2 mb-1">
-                              <Badge variant="outline" className="text-xs uppercase bg-white">{job.stage}</Badge>
+                              <Badge variant="outline" className="text-xs uppercase bg-white">{job.stage.replace(/_/g, ' ')}</Badge>
                               <span className="text-sm font-medium">
                                 {jobVehicle ? `${jobVehicle.make} ${jobVehicle.model}` : 'Unknown Vehicle'}
                               </span>
