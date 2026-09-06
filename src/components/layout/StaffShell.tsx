@@ -15,6 +15,7 @@ const navItems = [
   { icon: LayoutDashboard, label: "Workshop Board", href: "/staff/dashboard" },
   { icon: Wrench, label: "Job Queue", href: "/staff/jobs" },
   { icon: FileText, label: "Estimates", href: "/staff/estimates" },
+  { icon: FileText, label: "Invoices", href: "/staff/invoices" },
 ];
 
 export const StaffShell: React.FC = () => {

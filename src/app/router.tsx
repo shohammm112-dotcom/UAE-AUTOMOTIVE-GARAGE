@@ -29,6 +29,11 @@ import { StaffDashboardPage } from "./routes/staff/StaffDashboardPage";
 import { StaffJobsPage } from "./routes/staff/StaffJobsPage";
 import { StaffJobDetailPage } from "./routes/staff/StaffJobDetailPage";
 import { StaffEstimatesPage } from "./routes/staff/StaffEstimatesPage";
+import { StaffEstimateCreatePage } from "./routes/staff/StaffEstimateCreatePage";
+import { StaffEstimateDetailPage } from "./routes/staff/StaffEstimateDetailPage";
+import { StaffInvoicesPage } from "./routes/staff/StaffInvoicesPage";
+import { StaffInvoiceCreatePage } from "./routes/staff/StaffInvoiceCreatePage";
+import { StaffInvoiceDetailPage } from "./routes/staff/StaffInvoiceDetailPage";
 
 export const router = createBrowserRouter([
   {
@@ -73,6 +78,11 @@ export const router = createBrowserRouter([
       { path: "jobs", element: <StaffJobsPage /> },
       { path: "jobs/:id", element: <StaffJobDetailPage /> },
       { path: "estimates", element: <StaffEstimatesPage /> },
+      { path: "estimates/new", element: <StaffEstimateCreatePage /> },
+      { path: "estimates/:id", element: <StaffEstimateDetailPage /> },
+      { path: "invoices", element: <StaffInvoicesPage /> },
+      { path: "invoices/new", element: <StaffInvoiceCreatePage /> },
+      { path: "invoices/:id", element: <StaffInvoiceDetailPage /> },
     ],
   },
   {
