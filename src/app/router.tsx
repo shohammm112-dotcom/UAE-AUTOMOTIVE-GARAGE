@@ -9,20 +9,18 @@ import { RequestQuotePage } from "./routes/public/RequestQuotePage";
 import { LoginPage } from "./routes/public/LoginPage";
 import { BookServicePage } from "./routes/public/BookServicePage";
 
-// Generic placeholder for unbuilt portal pages
-const GenericPortalPlaceholder = ({ title }: { title: string }) => (
-  <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 border border-dashed border-zinc-200 rounded-xl bg-zinc-50/50">
-    <h1 className="text-2xl font-bold tracking-tight text-zinc-900 mb-2">{title}</h1>
-    <p className="text-zinc-500">To be implemented in Step 4.3 (Customer Portal).</p>
-  </div>
-);
-
-const DashboardPlaceholder = () => (
-  <div className="space-y-6">
-    <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-    <GenericPortalPlaceholder title="Dashboard Summary" />
-  </div>
-);
+// Portal Pages
+import { DashboardPage } from "./routes/portal/DashboardPage";
+import { VehiclesPage } from "./routes/portal/VehiclesPage";
+import { JobsPage } from "./routes/portal/JobsPage";
+import { JobDetailPage } from "./routes/portal/JobDetailPage";
+import { AppointmentsPage } from "./routes/portal/AppointmentsPage";
+import { InvoicesPage } from "./routes/portal/InvoicesPage";
+import { EstimatesPage } from "./routes/portal/EstimatesPage";
+import { EstimateDetailPage } from "./routes/portal/EstimateDetailPage";
+import { ProfilePage } from "./routes/portal/ProfilePage";
+import { NotificationsPage } from "./routes/portal/NotificationsPage";
+import { ServiceHistoryPage } from "./routes/portal/ServiceHistoryPage";
 
 export const router = createBrowserRouter([
   {
@@ -45,12 +43,17 @@ export const router = createBrowserRouter([
     path: "/portal",
     element: <AppShell />,
     children: [
-      { index: true, element: <DashboardPlaceholder /> },
-      { path: "vehicles", element: <GenericPortalPlaceholder title="Vehicles" /> },
-      { path: "appointments", element: <GenericPortalPlaceholder title="Appointments" /> },
-      { path: "jobs", element: <GenericPortalPlaceholder title="Active Jobs" /> },
-      { path: "estimates", element: <GenericPortalPlaceholder title="Estimates" /> },
-      { path: "invoices", element: <GenericPortalPlaceholder title="Invoices" /> },
+      { index: true, element: <DashboardPage /> },
+      { path: "vehicles", element: <VehiclesPage /> },
+      { path: "appointments", element: <AppointmentsPage /> },
+      { path: "jobs", element: <JobsPage /> },
+      { path: "jobs/:id", element: <JobDetailPage /> },
+      { path: "estimates", element: <EstimatesPage /> },
+      { path: "estimates/:id", element: <EstimateDetailPage /> },
+      { path: "invoices", element: <InvoicesPage /> },
+      { path: "profile", element: <ProfilePage /> },
+      { path: "notifications", element: <NotificationsPage /> },
+      { path: "history", element: <ServiceHistoryPage /> },
     ],
   },
   {
