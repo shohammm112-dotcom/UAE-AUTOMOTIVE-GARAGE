@@ -28,6 +28,10 @@ export class MockCustomerRepository implements ICustomerRepository {
     return null;
   }
 
+  public async findAll(): Promise<Customer[]> {
+    return Array.from(this.store.values());
+  }
+
   public async save(customer: Customer): Promise<void> {
     this.store.set(customer.id, customer);
   }

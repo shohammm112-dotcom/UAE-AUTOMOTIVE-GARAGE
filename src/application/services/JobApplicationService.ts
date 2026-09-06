@@ -23,6 +23,18 @@ export class JobApplicationService {
     return jobs.map((j) => this.toDto(j));
   }
 
+  public async listJobsForCustomerByStaff(context: AuthenticatedContext, customerId: string): Promise<JobResponseDto[]> {
+    AuthorizationGuard.assertStaffRole(context, ["admin", "workshop_manager", "service_advisor", "advisor", "technician", "mechanic"]);
+    const jobs = await this.jobRepo.findByCustomerId(customerId);
+    return jobs.map((j) => this.toDto(j));
+  }
+
+  public async listJobsForVehicleByStaff(context: AuthenticatedContext, vehicleId: string): Promise<JobResponseDto[]> {
+    AuthorizationGuard.assertStaffRole(context, ["admin", "workshop_manager", "service_advisor", "advisor", "technician", "mechanic"]);
+    const jobs = await this.jobRepo.findByVehicleId(vehicleId);
+    return jobs.map((j) => this.toDto(j));
+  }
+
   public async getJobDetails(context: AuthenticatedContext, jobId: string): Promise<JobResponseDto> {
     AuthorizationGuard.assertAuthenticated(context);
 

@@ -100,6 +100,21 @@ export class CustomerApplicationService {
     return this.toDto(customer);
   }
 
+  public async getAllCustomers(context: AuthenticatedContext): Promise<CustomerResponseDto[]> {
+    AuthorizationGuard.assertStaffRole(context, ['admin', 'workshop_manager', 'service_advisor', 'advisor', 'technician', 'mechanic']);
+    const customers = await this.customerRepo.findAll();
+    return customers.map(c => this.toDto(c));
+  }
+
+  public async getCustomerById(context: AuthenticatedContext, customerId: string): Promise<CustomerResponseDto> {
+    AuthorizationGuard.assertStaffRole(context, ['admin', 'workshop_manager', 'service_advisor', 'advisor', 'technician', 'mechanic']);
+    const customer = await this.customerRepo.findById(customerId);
+    if (!customer) {
+      throw new ResourceNotFoundError('Customer', customerId);
+    }
+    return this.toDto(customer);
+  }
+
   private toDto(c: Customer): CustomerResponseDto {
     return {
       id: c.id,

@@ -6,13 +6,15 @@ import {
   FileText, 
   LogOut, 
   ShieldCheck,
-  Building
+  Building,
+  Users
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Workshop Board", href: "/staff/dashboard" },
+  { icon: Users, label: "Customers", href: "/staff/customers" },
   { icon: Wrench, label: "Job Queue", href: "/staff/jobs" },
   { icon: FileText, label: "Estimates", href: "/staff/estimates" },
   { icon: FileText, label: "Invoices", href: "/staff/invoices" },

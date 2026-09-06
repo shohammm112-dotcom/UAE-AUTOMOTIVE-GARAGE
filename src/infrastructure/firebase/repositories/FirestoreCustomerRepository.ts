@@ -32,6 +32,11 @@ export class FirestoreCustomerRepository implements ICustomerRepository {
     return CustomerFirestoreMapper.toDomain(snapshot.docs[0].data() as CustomerFirestoreDocument);
   }
 
+  public async findAll(): Promise<Customer[]> {
+    const snapshot = await this.collection.get();
+    return snapshot.docs.map(doc => CustomerFirestoreMapper.toDomain(doc.data() as CustomerFirestoreDocument));
+  }
+
   public async save(customer: Customer): Promise<void> {
     const docData = CustomerFirestoreMapper.toDocument(customer);
     await this.collection.doc(customer.id).set(docData);

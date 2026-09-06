@@ -27,6 +27,9 @@ import { ServiceHistoryPage } from "./routes/portal/ServiceHistoryPage";
 // Staff Pages
 import { StaffDashboardPage } from "./routes/staff/StaffDashboardPage";
 import { StaffJobsPage } from "./routes/staff/StaffJobsPage";
+import { StaffCustomersPage } from "./routes/staff/StaffCustomersPage";
+import { StaffCustomerDetailPage } from "./routes/staff/StaffCustomerDetailPage";
+import { StaffVehicleDetailPage } from "./routes/staff/StaffVehicleDetailPage";
 import { StaffJobDetailPage } from "./routes/staff/StaffJobDetailPage";
 import { StaffEstimatesPage } from "./routes/staff/StaffEstimatesPage";
 import { StaffEstimateCreatePage } from "./routes/staff/StaffEstimateCreatePage";
@@ -75,6 +78,9 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/staff/dashboard" replace /> },
       { path: "dashboard", element: <StaffDashboardPage /> },
+      { path: "customers", element: <StaffCustomersPage /> },
+      { path: "customers/:id", element: <StaffCustomerDetailPage /> },
+      { path: "vehicles/:id", element: <StaffVehicleDetailPage /> },
       { path: "jobs", element: <StaffJobsPage /> },
       { path: "jobs/:id", element: <StaffJobDetailPage /> },
       { path: "estimates", element: <StaffEstimatesPage /> },

@@ -8,6 +8,7 @@ import { runOwnershipAndAuthorizationTests } from './ownershipAndAuthorization.t
 import { runInvoiceDerivationTests } from './invoiceDerivation.test.ts';
 import { runFirestoreInfrastructureTests } from './firestoreInfrastructure.test.ts';
 import { runApiBoundaryTests } from './apiBoundary.test.ts';
+import { runStaffMasterDataTests } from './staffMasterData.test.ts';
 
 export async function runAllTests(): Promise<{ passed: boolean; summary: string }> {
   console.log('====================================================');
@@ -25,6 +26,7 @@ export async function runAllTests(): Promise<{ passed: boolean; summary: string 
   await runInvoiceDerivationTests(runner);
   await runFirestoreInfrastructureTests(runner);
   await runApiBoundaryTests(runner);
+  await runStaffMasterDataTests(runner);
 
   const summary = runner.getSummary();
   console.log('====================================================');

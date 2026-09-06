@@ -144,5 +144,78 @@ export function createInternalRoutes(container: AppContainer): Router {
     }
   });
 
+  
+  /**
+   * GET /api/v1/internal/customers
+   */
+  router.get('/customers', authMiddleware.requireAuth(), workshopStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const customers = await container.services.customerService.getAllCustomers(req.context);
+      res.json({ customers });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * GET /api/v1/internal/customers/:id
+   */
+  router.get('/customers/:id', authMiddleware.requireAuth(), workshopStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const customer = await container.services.customerService.getCustomerById(req.context, req.params.id);
+      res.json({ customer });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * GET /api/v1/internal/customers/:id/vehicles
+   */
+  router.get('/customers/:id/vehicles', authMiddleware.requireAuth(), workshopStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const vehicles = await container.services.vehicleService.listVehiclesForCustomerByStaff(req.context, req.params.id);
+      res.json({ vehicles });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * GET /api/v1/internal/vehicles/:id
+   */
+  router.get('/vehicles/:id', authMiddleware.requireAuth(), workshopStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const vehicle = await container.services.vehicleService.getVehicleByIdForStaff(req.context, req.params.id);
+      res.json({ vehicle });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * GET /api/v1/internal/vehicles/:id/jobs
+   */
+  router.get('/vehicles/:id/jobs', authMiddleware.requireAuth(), workshopStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const jobs = await container.services.jobService.listJobsForVehicleByStaff(req.context, req.params.id);
+      res.json({ jobs });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * GET /api/v1/internal/customers/:id/jobs
+   */
+  router.get('/customers/:id/jobs', authMiddleware.requireAuth(), workshopStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const jobs = await container.services.jobService.listJobsForCustomerByStaff(req.context, req.params.id);
+      res.json({ jobs });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   return router;
 }

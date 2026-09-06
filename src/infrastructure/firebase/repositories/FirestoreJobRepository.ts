@@ -24,6 +24,11 @@ export class FirestoreJobRepository implements IJobRepository {
     return snapshot.docs.map((doc) => JobFirestoreMapper.toDomain(doc.data() as JobFirestoreDocument));
   }
 
+  public async findByVehicleId(vehicleId: string): Promise<Job[]> {
+    const snapshot = await this.collection.where('vehicleId', '==', vehicleId).get();
+    return snapshot.docs.map((doc) => JobFirestoreMapper.toDomain(doc.data() as JobFirestoreDocument));
+  }
+
   public async findActiveByCustomerId(customerId: CustomerId): Promise<Job[]> {
     const all = await this.findByCustomerId(customerId);
     return all.filter((job) => job.stage !== 'delivered');

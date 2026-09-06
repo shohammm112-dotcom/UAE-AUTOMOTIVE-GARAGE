@@ -89,6 +89,21 @@ export class VehicleApplicationService {
     return this.toDto(vehicle);
   }
 
+  public async listVehiclesForCustomerByStaff(context: AuthenticatedContext, customerId: string): Promise<VehicleResponseDto[]> {
+    AuthorizationGuard.assertStaffRole(context, ['admin', 'workshop_manager', 'service_advisor', 'advisor', 'technician', 'mechanic']);
+    const vehicles = await this.vehicleRepo.findByCustomerId(customerId);
+    return vehicles.map((v) => this.toDto(v));
+  }
+
+  public async getVehicleByIdForStaff(context: AuthenticatedContext, vehicleId: string): Promise<VehicleResponseDto> {
+    AuthorizationGuard.assertStaffRole(context, ['admin', 'workshop_manager', 'service_advisor', 'advisor', 'technician', 'mechanic']);
+    const vehicle = await this.vehicleRepo.findById(vehicleId);
+    if (!vehicle) {
+      throw new ResourceNotFoundError('Vehicle', vehicleId);
+    }
+    return this.toDto(vehicle);
+  }
+
   private toDto(v: Vehicle): VehicleResponseDto {
     return {
       id: v.id,

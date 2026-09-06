@@ -19,6 +19,16 @@ export class MockJobRepository implements IJobRepository {
     return results;
   }
 
+  public async findByVehicleId(vehicleId: string): Promise<Job[]> {
+    const results: Job[] = [];
+    for (const j of this.store.values()) {
+      if (j.vehicleId === vehicleId) {
+        results.push(j);
+      }
+    }
+    return results;
+  }
+
   public async findActiveByCustomerId(customerId: CustomerId): Promise<Job[]> {
     const results: Job[] = [];
     for (const j of this.store.values()) {

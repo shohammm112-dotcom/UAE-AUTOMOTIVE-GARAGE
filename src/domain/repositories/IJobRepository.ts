@@ -4,6 +4,7 @@ import { CustomerId, JobId } from '../types.ts';
 export interface IJobRepository {
   findById(id: JobId): Promise<Job | null>;
   findByCustomerId(customerId: CustomerId): Promise<Job[]>;
+  findByVehicleId(vehicleId: string): Promise<Job[]>;
   findActiveByCustomerId(customerId: CustomerId): Promise<Job[]>;
   listAll(): Promise<Job[]>;
   save(job: Job): Promise<void>;
