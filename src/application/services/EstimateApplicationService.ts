@@ -41,6 +41,26 @@ export class EstimateApplicationService {
     return this.toDto(estimate);
   }
 
+  /**
+   * Lists the authenticated customer's own estimates.
+   *
+   * Previously absent, which left the customer estimates page a hardcoded stub showing an
+   * "API GAP: Endpoint Missing" banner — a customer could only reach an estimate by typing its
+   * raw id into the URL. `IEstimateRepository.findByCustomerId` already existed; only the
+   * service method and route were missing.
+   *
+   * Scoped strictly to the caller's own customerId, so it cannot be used to enumerate others.
+   */
+  public async listEstimatesForCustomer(
+    context: AuthenticatedContext
+  ): Promise<EstimateResponseDto[]> {
+    AuthorizationGuard.assertAuthenticated(context);
+    if (!context.customerId) return [];
+
+    const estimates = await this.estimateRepo.findByCustomerId(context.customerId);
+    return estimates.map((e) => this.toDto(e));
+  }
+
   public async getLatestEstimateForJob(
     context: AuthenticatedContext,
     jobId: string

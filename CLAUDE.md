@@ -823,6 +823,21 @@ Open items, highest value first:
    while its sibling `JobResponseDto.stage` had been narrowed to `JobStage` in
    Step 5.6. It is now `EstimateStatus`, so `=== 'pending'` is a compile error.
    Coverage: `src/tests/estimateApprovalIntegrity.test.ts` (13 tests).
+18b. RESOLVED (demo prep) — the customer estimate list exists. `GET /api/v1/estimates`
+    plus `EstimateApplicationService.listEstimatesForCustomer` replace the hardcoded
+    "API GAP: Endpoint Missing" stub that `portal/EstimatesPage.tsx` used to render.
+    `IEstimateRepository.findByCustomerId` already existed; only the service method,
+    the route and a real page were missing. Scoped to `context.customerId`, so it
+    cannot enumerate other customers (verified: a second customer sees 0).
+
+48. RESOLVED (demo prep) — **every error message in the app was generic.**
+    `src/lib/api/client.ts` read `errorData.message`, but the API's envelope is
+    `{ error: { code, message, details } }` (see `errorHandlerMiddleware`). The real
+    message was therefore never found and every failure surfaced as "An unexpected
+    error occurred" — hiding, for example, a perfectly clear
+    `404 ApprovalRecord with ID "ewfA" was not found`. One-line path fix; affects
+    every error surface in the product.
+
 5. `src/types/api.ts` is otherwise dead code and should be deleted — see the
    canonical DTO decision above. Its `EstimateResponseDto.status` also
    advertises `pending_review`, which is not a valid `EstimateStatus`.

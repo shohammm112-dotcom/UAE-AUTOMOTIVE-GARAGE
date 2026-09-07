@@ -8,6 +8,21 @@ export function createEstimateRoutes(container: AppContainer): Router {
   const authMiddleware = createAuthMiddleware(container);
 
   /**
+   * GET /api/v1/estimates
+   * The authenticated customer's own estimates. Declared before '/:id' so the bare path is not
+   * captured by the parameterised route.
+   */
+  router.get('/', authMiddleware.requireAuth(), async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const context = req.context!;
+      const estimates = await container.services.estimateService.listEstimatesForCustomer(context);
+      res.json({ estimates });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
    * GET /api/v1/estimates/:id
    */
   router.get('/:id', authMiddleware.requireAuth(), async (req: AuthenticatedRequest, res: Response, next) => {

@@ -38,11 +38,18 @@ async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise
       errorData = { message: response.statusText };
     }
     
+    // The API's error envelope is { error: { code, message, details } } — see
+    // errorHandlerMiddleware. Reading errorData.message directly always missed it, so every
+    // failure in the app surfaced as "An unexpected error occurred" and hid the real reason
+    // (e.g. a 404 "ApprovalRecord with ID ... was not found"). The flat shape is kept as a
+    // fallback for the response.statusText path above.
+    const apiError = errorData?.error ?? errorData;
+
     throw new ApiError(
       response.status,
-      errorData.message || "An unexpected error occurred",
-      errorData.code,
-      errorData.details
+      apiError?.message || "An unexpected error occurred",
+      apiError?.code,
+      apiError?.details
     );
   }
 
