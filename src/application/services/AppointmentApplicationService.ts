@@ -4,7 +4,11 @@ import { Appointment } from '../../domain/entities/Appointment.ts';
 import { AuthenticatedContext } from '../security/AuthenticatedContext.ts';
 import { AuthorizationGuard } from '../security/AuthorizationGuard.ts';
 import { AppointmentResponseDto, RequestAppointmentDto, RescheduleAppointmentDto } from '../dto/AppDtos.ts';
-import { ResourceNotFoundError, ValidationFailedError } from '../errors/ApplicationError.ts';
+import {
+  AuthorizationForbiddenError,
+  ResourceNotFoundError,
+  ValidationFailedError,
+} from '../errors/ApplicationError.ts';
 import { isAppointmentStatus } from '../../domain/stateMachines/AppointmentStateMachine.ts';
 
 /** GST is fixed at UTC+4 for Asia/Dubai and has no daylight-saving time. */
@@ -44,7 +48,16 @@ export class AppointmentApplicationService {
       if (!vehicle) {
         throw new ResourceNotFoundError('Vehicle', dto.vehicleId);
       }
-      AuthorizationGuard.assertCustomerOwnsEntity(context, vehicle.customerId, 'Vehicle');
+      // The appointment is created under context.customerId, so the vehicle MUST belong to
+      // that same customer. Deliberately NOT assertCustomerOwnsEntity: that guard early-returns
+      // for actorType 'staff', and authMiddleware sets customerId and actorType independently
+      // (authMiddleware.ts:47-48), so a staff member who is also a registered customer would
+      // otherwise attach another customer's vehicle to their own appointment.
+      if (vehicle.customerId !== context.customerId) {
+        throw new AuthorizationForbiddenError(
+          'Unauthorized: You do not have permission to access or modify this Vehicle'
+        );
+      }
     }
 
     const appointmentId = `apt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;

@@ -2,6 +2,7 @@ import { createApplicationContainer } from '../infrastructure/di/container.ts';
 import { Appointment } from '../domain/entities/Appointment.ts';
 import { AppointmentFirestoreMapper } from '../infrastructure/firebase/mappers/AppointmentFirestoreMapper.ts';
 import { AppointmentApplicationService } from '../application/services/AppointmentApplicationService.ts';
+import { MockAppointmentRepository } from '../infrastructure/mock/MockAppointmentRepository.ts';
 import { AuthenticatedContextFactory } from '../application/security/AuthenticatedContext.ts';
 import type { AppointmentStatus } from '../domain/stateMachines/AppointmentStateMachine.ts';
 import { assert, assertEquals, assertThrows, TestRunner } from './testUtils.ts';
@@ -395,6 +396,73 @@ export async function runStaffAppointmentOperationsTests(runner: TestRunner): Pr
       const appointment = AppointmentFirestoreMapper.toDomain(persistedAppointment());
       assertEquals(appointment.preferredDate, '2020-01-01');
       assertEquals(appointment.status, 'requested');
+    }
+  );
+
+  // --- SEC: a booker cannot attach a vehicle they do not own ---
+  //
+  // authMiddleware.ts:47-48 sets customerId and actorType INDEPENDENTLY, so a staff member
+  // who is also a registered customer arrives with actorType 'staff' AND a customerId.
+  // assertCustomerOwnsEntity early-returns for staff, so using it here let such an account
+  // attach ANY customer's vehicle to its own appointment. The check is now a direct
+  // comparison against context.customerId.
+
+  await runner.test(
+    'SECURITY: a dual staff+customer account cannot attach another customer\'s vehicle',
+    async () => {
+      const appointmentRepo = new MockAppointmentRepository();
+      const vehicleRepo = {
+        findById: async (id: string) =>
+          id === 'veh_victim' ? ({ id: 'veh_victim', customerId: 'cust_victim' } as never) : null,
+      } as never;
+      const service = new AppointmentApplicationService(appointmentRepo, vehicleRepo);
+
+      // actorType 'staff' WITH a customerId — exactly what authMiddleware produces.
+      const dualAccount = {
+        actorType: 'staff',
+        customerId: 'cust_staffperson',
+        roles: Object.freeze(['technician']),
+        staffId: 'stf_1',
+        requestId: 'req_dual',
+        ipAddress: '127.0.0.1',
+      } as never;
+
+      await assertThrows(
+        () =>
+          service.requestAppointment(dualAccount, {
+            serviceType: 'Repair',
+            preferredDate: '2099-12-01',
+            preferredTimeSlot: 'morning',
+            dropoffType: 'customer_dropoff',
+            vehicleId: 'veh_victim',
+          }),
+        'permission'
+      );
+    }
+  );
+
+  await runner.test(
+    'a customer CAN still attach a vehicle they do own',
+    async () => {
+      const appointmentRepo = new MockAppointmentRepository();
+      const vehicleRepo = {
+        findById: async (id: string) =>
+          id === 'veh_mine' ? ({ id: 'veh_mine', customerId: 'cust_owner' } as never) : null,
+      } as never;
+      const service = new AppointmentApplicationService(appointmentRepo, vehicleRepo);
+
+      const result = await service.requestAppointment(
+        AuthenticatedContextFactory.forCustomer({ customerId: 'cust_owner' }),
+        {
+          serviceType: 'Repair',
+          preferredDate: '2099-12-01',
+          preferredTimeSlot: 'morning',
+          dropoffType: 'customer_dropoff',
+          vehicleId: 'veh_mine',
+        }
+      );
+      assertEquals(result.vehicleId, 'veh_mine');
+      assertEquals(result.customerId, 'cust_owner');
     }
   );
 }
