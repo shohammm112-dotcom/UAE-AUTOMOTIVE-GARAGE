@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -10,7 +10,10 @@ export const StaffInvoiceCreatePage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   
-  const [approvalId, setApprovalId] = useState("");
+  // Prefilled when arriving from an approved estimate, so staff never have to know the
+  // approval id by heart. Still editable for the manual path.
+  const [searchParams] = useSearchParams();
+  const [approvalId, setApprovalId] = useState(searchParams.get("approvalId") ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

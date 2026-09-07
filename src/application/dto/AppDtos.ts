@@ -196,3 +196,21 @@ export interface InvoiceResponseDto {
   readonly issuedAt: string;
   readonly paidAt?: string;
 }
+
+/**
+ * The customer approval an invoice derives from. Read-only projection for commercial staff:
+ * invoice generation requires an approvalId, which was previously exposed nowhere.
+ */
+export interface ApprovalSummaryDto {
+  readonly approvalId: string;
+  readonly estimateId: string;
+  readonly estimateVersion: number;
+  readonly customerId: string;
+  readonly approvedItemIds: readonly string[];
+  readonly rejectedItemIds: readonly string[];
+  readonly approvedSubtotalFils: number;
+  readonly approvedVatFils: number;
+  readonly approvedTotalFils: number;
+  readonly approvedTotalDisplay: string;
+  readonly serverTimestamp?: string;
+}

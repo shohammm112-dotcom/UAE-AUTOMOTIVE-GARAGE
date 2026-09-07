@@ -8,6 +8,18 @@ import { RuntimeEnvironment } from './src/infrastructure/config/RuntimeEnvironme
 
 async function startServer() {
   const container = createApplicationContainer();
+
+  // DEMO FIXTURE — development only, and only over mock infrastructure.
+  // Mock repositories start empty and reset on restart, and there is still no job-creation
+  // path in the application (debt #36), so without this a fresh instance has nothing to show.
+  // Double-gated: never in production, and never against real Firestore data. Opt out with
+  // DEMO_SEED=false. The dynamic import keeps the fixture out of a production artifact.
+  if (!RuntimeEnvironment.isProduction() && container.mode === 'mock' && process.env.DEMO_SEED !== 'false') {
+    const { seedDemoData } = await import('./src/infrastructure/mock/DemoSeed.ts');
+    await seedDemoData(container.repositories);
+    console.log('[demo-seed] Loaded demo scenario (Sanjeev Bhatia / Nissan Patrol Super Safari).');
+  }
+
   const app = createExpressApp(container);
   const PORT = 3000;
 

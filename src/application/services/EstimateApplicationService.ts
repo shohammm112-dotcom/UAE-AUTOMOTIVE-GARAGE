@@ -8,7 +8,12 @@ import { Estimate, EstimateItem } from '../../domain/entities/Estimate.ts';
 import { EstimateStateMachine } from '../../domain/stateMachines/EstimateStateMachine.ts';
 import { AuthenticatedContext } from '../security/AuthenticatedContext.ts';
 import { AuthorizationGuard } from '../security/AuthorizationGuard.ts';
-import { CreateEstimateDto, EstimateResponseDto, SubmitEstimateDecisionDto } from '../dto/AppDtos.ts';
+import {
+  ApprovalSummaryDto,
+  CreateEstimateDto,
+  EstimateResponseDto,
+  SubmitEstimateDecisionDto,
+} from '../dto/AppDtos.ts';
 import { ConflictError, ResourceNotFoundError, ValidationFailedError } from '../errors/ApplicationError.ts';
 import { MoneyAed } from '../../domain/valueObjects/MoneyAed.ts';
 
@@ -53,6 +58,48 @@ export class EstimateApplicationService {
     AuthorizationGuard.assertStaffRole(context, ["admin", "workshop_manager", "service_advisor", "advisor", "technician", "mechanic"]);
     const estimates = await this.estimateRepo.listAll();
     return estimates.map((e) => this.toDto(e));
+  }
+
+  /**
+   * Returns the customer's approval record for an estimate, so commercial staff can raise the
+   * invoice that derives from it.
+   *
+   * Invoice generation requires an approvalId, but approvals were previously not exposed over
+   * HTTP at all — the id existed only inside a domain event, leaving the staff invoice screen
+   * asking for a value nothing in the product could supply.
+   *
+   * Read-only, and scoped to the commercial staff set that may already generate invoices and
+   * record payments; technicians and mechanics are excluded, matching commercialStaffGuard.
+   */
+  public async getApprovalForEstimate(
+    context: AuthenticatedContext,
+    estimateId: string
+  ): Promise<ApprovalSummaryDto> {
+    AuthorizationGuard.assertStaffRole(context, [
+      'admin',
+      'workshop_manager',
+      'service_advisor',
+      'advisor',
+    ]);
+
+    const approval = await this.approvalRepo.findByEstimateId(estimateId);
+    if (!approval) {
+      throw new ResourceNotFoundError('Approval for estimate', estimateId);
+    }
+
+    return {
+      approvalId: approval.id,
+      estimateId: approval.estimateId,
+      estimateVersion: approval.estimateVersion,
+      customerId: approval.customerId,
+      approvedItemIds: [...approval.approvedItemIds],
+      rejectedItemIds: [...approval.rejectedItemIds],
+      approvedSubtotalFils: approval.approvedSubtotalFils,
+      approvedVatFils: approval.approvedVatFils,
+      approvedTotalFils: approval.approvedTotalFils,
+      approvedTotalDisplay: MoneyAed.fromFils(approval.approvedTotalFils).toDisplayString(),
+      serverTimestamp: approval.serverTimestamp,
+    };
   }
 
   /**

@@ -10,15 +10,34 @@ Treat the repository itself as authoritative. Do not assume previous agent repor
 
 The current local `main` checkpoint is:
 
-- Commit message: `feat: add staff appointment operations`
+- Commit message: `feat: add demo fixture and close the invoice approval gap`
   (find it with `git log --oneline -1`)
-- Parent: `5b7d26f` (`fix: harden appointment domain and authorization`), which
-  closed Phase 6.1.
-- This checkpoint carries Phase 6.2 — staff appointment operations: the staff
-  queue, complete, no-show and reschedule.
-- Verification at this checkpoint: `npm test` 158/158 (exit 0), `npm run lint`
+- Lineage: `5b7d26f` (Phase 6.1) -> `72b37fb` (Phase 6.2) -> `afe3d01` (6.1
+  security follow-up: vehicle ownership on booking) -> this checkpoint.
+- This checkpoint is DEMO PREPARATION, not a new phase. It adds a development-only
+  demo fixture, closes the invoice approval-id gap that broke the customer ->
+  payment chain in the UI, and fixes a live field-name bug on the vehicles page.
+- Verification at this checkpoint: `npm test` 164/164 (exit 0), `npm run lint`
   exit 0, `npm run build` exit 0 with one pre-existing non-blocking Vite
   chunk-size warning (~507 kB). See debt #15.
+
+### Demo fixture
+
+`src/infrastructure/mock/DemoSeed.ts`, invoked from `server.ts`. Double-gated:
+`!RuntimeEnvironment.isProduction()` AND `container.mode === 'mock'`, behind a
+dynamic import so it cannot reach a production artifact. Opt out with
+`DEMO_SEED=false`. Idempotent, and it resets on every restart so the demo can be
+rehearsed repeatedly from a clean state.
+
+It reproduces a real client invoice (AutoGuru INV260526412) — Sanjeev Bhatia,
+Nissan Patrol Super Safari 2022, VIN JN8FY1NY5NX100590, plate Dubai I 85504,
+61,323 km — with the job seeded MID-FLOW at `estimate_pending` and an estimate
+awaiting the customer's decision, so the demo performs approval, workshop
+progression, invoicing and payment live.
+
+Verified end to end over HTTP: approval -> estimate locks -> approval id resolves
+-> four job stage transitions -> invoice issued (subtotal AED 4,168.11, VAT
+208.41, total 4,376.52, TRN present) -> payment recorded as paid.
 
 ### Current phase
 
@@ -1005,15 +1024,69 @@ FUNCTIONAL GAPS (genuine Phase 6 scope):
     raised. The limiter should be scoped to `/api` (or the Vite branch mounted
     ahead of it). Related to debt #20, which is the production half of the same
     middleware being under-specified.
-42. **There is no customer-creation path anywhere in the application.** No route
-    creates a `Customer`; `GET /customers/profile` 404s for a valid mock token
-    and nothing provisions one. Mock repositories start empty, so a fresh
-    instance can never have a customer, and therefore never a vehicle or an
-    appointment. This makes true end-to-end browser testing of the customer
-    journey impossible without direct repository seeding — Phase 6.1's browser
-    verification had to stub the API at the network layer for that reason. This
-    is the sibling of debt #36 (no job-creation path) and should be triaged with
-    it: the product has no onboarding.
+42. **CORRECTED — customer creation exists but the frontend never calls it.** An
+    earlier revision of this entry claimed no customer-creation path existed
+    anywhere. That was WRONG, and the error came from generalising a single 404.
+    `POST /api/v1/auth/bootstrap` (`authRoutes.ts:39,54`) provisions a customer
+    via `CustomerApplicationService.syncAuthenticatedCustomer`. What is actually
+    missing is the client call: `AuthProvider` only calls `GET /auth/me`, which
+    runs `getProfile` and 404s when no `Customer` row exists. So a fresh instance
+    has no customer until something calls bootstrap directly.
+
+    Still open: the login flow should bootstrap-then-fetch rather than fetch-only.
+    Verify claims like this against the routing table before recording them.
+
+### Discovered during demo preparation (2026-09-07)
+
+43. **`VehiclesPage` rendered fields that do not exist on `VehicleResponseDto`.**
+    FIXED. It read `v.emirate`, `v.plateCode`, `v.plateNumber` and
+    `v.currentMileageKm` — all fields of the DEAD `src/types/api.ts` (debt #5),
+    not of the real DTO, which carries `plate: { emirate, code, number,
+    displayString }` and `odometerReadingKm`. Every vehicle card therefore showed
+    "undefined undefined-undefined" for the plate and "0 km" for mileage. Invisible
+    to `tsc` because the page used `useApi<{ vehicles: any[] }>` and
+    `vehicles.map((v: any) => ...)`.
+
+    This is the THIRD instance of the same defect class (debt #4 estimates, #27/#28
+    appointments, now vehicles): a page reading invented field names behind `any`.
+    Now typed `VehicleResponseDto[]` with the `: any` removed, and verified
+    load-bearing — restoring the old field names produces three TS2339 errors.
+    **Any remaining `useApi<{ ...: any[] }>` in the portal is a latent instance of
+    this bug.**
+
+44. **Invoice generation required an `approvalId` that was exposed nowhere.**
+    FIXED. `StaffInvoiceCreatePage` asked staff to type an approval id, but no
+    route served approvals (zero `approvalRepo` references across all routes), the
+    id appeared only inside a domain event, and no page displayed it — so the
+    protected customer -> payment chain could not be completed through the UI.
+    Added `GET /internal/estimates/:id/approval` behind `commercialStaffGuard`,
+    surfaced the reference plus a "Generate Invoice" action on the staff estimate
+    page, and made the invoice form accept a prefilled `?approvalId=`.
+    Four regression tests; the role guard is verified load-bearing.
+
+45. **The customer estimate page recomputes VAT client-side.**
+    `portal/EstimateDetailPage.tsx` derives its displayed subtotal/VAT/total from
+    `unitPriceFils * quantity * 0.05` rather than using the server-computed
+    `subtotalDisplay`/`vatDisplay`/`totalDisplay`. That is a second source of truth
+    for money and will drift from the server's rounding (see #46). It also formats
+    without thousands separators, unlike every other money surface. Not fixed —
+    commercial-model change, deliberately out of scope before the client demo.
+
+46. **Per-line vs per-total VAT rounding differs from the client's real invoice.**
+    On the client's own document (AutoGuru INV260526412) VAT is computed per line
+    and summed, giving AED 208.40 on a 4,168.11 subtotal. `TaxCalculationService`
+    computes VAT on the subtotal, giving 208.41 — a one-fil difference, so our
+    total reads 4,376.52 against their 4,376.51. Our subtotal matches exactly.
+    This is a deliberate policy question for the client, not a defect to patch
+    silently; changing it touches Phase 5 protected commercial code.
+
+47. **The client's commercial model has three buckets; ours has a different three.**
+    Their invoice separates Spare Parts / Labour Charges / **Sublet Services**
+    (outsourced work such as AC condenser flush and laser wheel alignment).
+    `EstimateItemType` is `'part' | 'labor' | 'consumable'` — no `sublet`, and they
+    have no `consumable`. The demo fixture types sublet lines as `labor` and marks
+    them in the description. Adding a real `sublet` type is a commercial-model
+    decision for Phase 7 alongside parts/inventory.
 
 Do not bundle these into unrelated feature work without explicit scope.
 

@@ -322,6 +322,91 @@ export async function runEstimateApprovalIntegrityTests(runner: TestRunner): Pro
     }
   );
 
+  // ------------------------------------------- approval lookup for invoice generation
+  //
+  // Invoice generation requires an approvalId, but approvals were exposed nowhere over HTTP:
+  // the id lived only inside a domain event, so the staff invoice screen asked for a value
+  // nothing in the product could supply. getApprovalForEstimate closes that gap and is scoped
+  // to the commercial staff set, matching who may already generate invoices.
+
+  await runner.test('commercial staff can resolve the approval an invoice derives from', async () => {
+    const container = createApplicationContainer();
+    const { customerId, estimateId } = await seed(container);
+    await container.services.estimateService.submitCustomerDecision(customerCtx(customerId), {
+      estimateId,
+      decisions: [
+        { itemId: 'item_mandatory_brakes', decision: 'approved' as const },
+        { itemId: 'item_optional_filter', decision: 'approved' as const },
+      ],
+    });
+
+    for (const role of ['admin', 'workshop_manager', 'service_advisor', 'advisor']) {
+      const summary = await container.services.estimateService.getApprovalForEstimate(
+        AuthenticatedContextFactory.forStaff({ roles: [role] }),
+        estimateId
+      );
+      assertEquals(summary.estimateId, estimateId);
+      assert(
+        summary.approvalId.length > 0,
+        `${role} must receive a usable approvalId for invoice generation`
+      );
+    }
+  });
+
+  await runner.test('technicians and mechanics cannot resolve an approval', async () => {
+    const container = createApplicationContainer();
+    const { customerId, estimateId } = await seed(container);
+    await container.services.estimateService.submitCustomerDecision(customerCtx(customerId), {
+      estimateId,
+      decisions: [
+        { itemId: 'item_mandatory_brakes', decision: 'approved' as const },
+        { itemId: 'item_optional_filter', decision: 'approved' as const },
+      ],
+    });
+
+    for (const role of ['technician', 'mechanic']) {
+      await assertThrows(
+        () =>
+          container.services.estimateService.getApprovalForEstimate(
+            AuthenticatedContextFactory.forStaff({ roles: [role] }),
+            estimateId
+          ),
+        'Missing required role'
+      );
+    }
+  });
+
+  await runner.test('a customer cannot resolve an approval record', async () => {
+    const container = createApplicationContainer();
+    const { customerId, estimateId } = await seed(container);
+    await container.services.estimateService.submitCustomerDecision(customerCtx(customerId), {
+      estimateId,
+      decisions: [
+        { itemId: 'item_mandatory_brakes', decision: 'approved' as const },
+        { itemId: 'item_optional_filter', decision: 'approved' as const },
+      ],
+    });
+
+    await assertThrows(
+      () =>
+        container.services.estimateService.getApprovalForEstimate(customerCtx(customerId), estimateId),
+      'Staff authorization is required'
+    );
+  });
+
+  await runner.test('resolving an approval that does not exist is a not-found', async () => {
+    const container = createApplicationContainer();
+    const { estimateId } = await seed(container);
+    await assertThrows(
+      () =>
+        container.services.estimateService.getApprovalForEstimate(
+          AuthenticatedContextFactory.forStaff({ roles: ['admin'] }),
+          estimateId
+        ),
+      'not found'
+    );
+  });
+
   await runner.test('the authoritative EstimateStatus union is unchanged', () => {
     const source = readFileSync(
       resolve(SRC_ROOT, 'domain/stateMachines/EstimateStateMachine.ts'),

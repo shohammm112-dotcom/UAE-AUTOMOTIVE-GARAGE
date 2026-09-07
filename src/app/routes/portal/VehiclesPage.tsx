@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useApi } from "@/lib/api/hooks";
+import type { VehicleResponseDto } from "@/application/dto/AppDtos";
 import { ApiClient } from "@/lib/api/client";
 import { Car, Plus, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 
 export const VehiclesPage: React.FC = () => {
-  const { data, isLoading, error, refetch } = useApi<{ vehicles: any[] }>("/vehicles");
+  const { data, isLoading, error, refetch } = useApi<{ vehicles: VehicleResponseDto[] }>("/vehicles");
   const vehicles = data?.vehicles || [];
   const [isAdding, setIsAdding] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -127,7 +128,7 @@ export const VehiclesPage: React.FC = () => {
         </div>
       ) : vehicles.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {vehicles.map((v: any) => (
+          {vehicles.map((v) => (
             <div key={v.id} className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
               <div className="px-6 py-5 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between">
                 <div className="flex items-center space-x-3">
@@ -144,11 +145,11 @@ export const VehiclesPage: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-zinc-500 text-xs uppercase tracking-wider mb-1">Plate</p>
-                    <p className="font-medium">{v.emirate} {v.plateCode}-{v.plateNumber}</p>
+                    <p className="font-medium">{v.plate.displayString}</p>
                   </div>
                   <div>
                     <p className="text-zinc-500 text-xs uppercase tracking-wider mb-1">Mileage</p>
-                    <p className="font-medium">{v.currentMileageKm?.toLocaleString() || 0} km</p>
+                    <p className="font-medium">{v.odometerReadingKm?.toLocaleString() ?? 0} km</p>
                   </div>
                   <div className="col-span-2">
                     <p className="text-zinc-500 text-xs uppercase tracking-wider mb-1">VIN</p>

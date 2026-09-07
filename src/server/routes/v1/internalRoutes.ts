@@ -206,6 +206,26 @@ export function createInternalRoutes(container: AppContainer): Router {
   });
 
   /**
+   * GET /api/v1/internal/estimates/:id/approval
+   * Returns the customer approval an invoice derives from.
+   *
+   * Invoice generation requires an approvalId, but approvals were not exposed over HTTP at all,
+   * so the staff invoice screen asked for a value nothing in the product could supply.
+   */
+  router.get('/estimates/:id/approval', authMiddleware.requireAuth(), commercialStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const context = req.context!;
+      const approval = await container.services.estimateService.getApprovalForEstimate(
+        context,
+        req.params.id
+      );
+      res.json({ approval });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
    * POST /api/v1/internal/invoices/:id/record-payment
    * Records receipt of payment.
    */

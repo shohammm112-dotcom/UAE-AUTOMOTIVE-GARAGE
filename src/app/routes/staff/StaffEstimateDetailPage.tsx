@@ -17,6 +17,12 @@ interface EstimateItem {
   decision?: string;
 }
 
+interface ApprovalSummary {
+  approvalId: string;
+  approvedTotalDisplay: string;
+  serverTimestamp?: string;
+}
+
 interface Estimate {
   id: string;
   jobId: string;
@@ -38,16 +44,30 @@ export const StaffEstimateDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [approval, setApproval] = useState<ApprovalSummary | null>(null);
 
   const fetchEstimate = async () => {
     try {
       setLoading(true);
-      // We don't have GET /api/v1/internal/estimates/:id, but we DO have GET /api/v1/estimates/:id for customers.
-      // Wait, is there a staff way to get an estimate?
-      // Wait, let's check EstimateApplicationService. getEstimate asserts customer owns entity unless actor is staff!
-      // So GET /api/v1/estimates/:id works for staff too. Let's verify.
+      // There is no GET /internal/estimates/:id. EstimateApplicationService.getEstimate permits
+      // staff readers, so the customer-facing route serves staff too.
       const response = await ApiClient.get<{ estimate: Estimate }>(`/estimates/${id}`);
       setEstimate(response.estimate);
+
+      // Once the customer has decided, surface the approval this estimate produced so staff can
+      // raise the invoice from it. Absent for estimates not yet decided, which is not an error.
+      if (['approved', 'partially_approved', 'locked'].includes(response.estimate.status)) {
+        try {
+          const approvalResponse = await ApiClient.get<{ approval: ApprovalSummary }>(
+            `/internal/estimates/${id}/approval`
+          );
+          setApproval(approvalResponse.approval);
+        } catch {
+          setApproval(null);
+        }
+      } else {
+        setApproval(null);
+      }
     } catch (err: any) {
       setError(err.message || "Failed to load estimate");
     } finally {
@@ -217,6 +237,27 @@ export const StaffEstimateDetailPage: React.FC = () => {
               <div className="text-2xl font-bold text-blue-900">
                 {estimate.approvedTotalDisplay}
               </div>
+
+              {approval && (
+                <div className="mt-5 pt-5 border-t border-blue-200">
+                  <p className="text-xs uppercase tracking-wide text-blue-800/70 mb-1">Approval Reference</p>
+                  <p className="font-mono text-xs text-blue-900 break-all mb-1">{approval.approvalId}</p>
+                  {approval.serverTimestamp && (
+                    <p className="text-xs text-blue-800/70 mb-4">
+                      Approved {new Date(approval.serverTimestamp).toLocaleString()}
+                    </p>
+                  )}
+                  {hasCapability(user?.roles || [], "invoices:generate") && (
+                    <Button
+                      className="w-full"
+                      onClick={() => navigate(`/staff/invoices/new?approvalId=${encodeURIComponent(approval.approvalId)}`)}
+                    >
+                      <FileText className="w-4 h-4 mr-2" />
+                      Generate Invoice
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
