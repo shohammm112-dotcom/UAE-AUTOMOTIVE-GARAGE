@@ -15,6 +15,7 @@ import { runJobLifecycleConsistencyTests } from './jobLifecycleConsistency.test.
 import { runProductionAuthSafetyTests } from './productionAuthSafety.test.ts';
 import { runEstimateApprovalIntegrityTests } from './estimateApprovalIntegrity.test.ts';
 import { runAppointmentDomainIntegrityTests } from './appointmentDomainIntegrity.test.ts';
+import { runStaffAppointmentOperationsTests } from './staffAppointmentOperations.test.ts';
 
 export async function runAllTests(): Promise<{ passed: boolean; summary: string }> {
   console.log('====================================================');
@@ -39,6 +40,7 @@ export async function runAllTests(): Promise<{ passed: boolean; summary: string 
   await runProductionAuthSafetyTests(runner);
   await runEstimateApprovalIntegrityTests(runner);
   await runAppointmentDomainIntegrityTests(runner);
+  await runStaffAppointmentOperationsTests(runner);
 
   const summary = runner.getSummary();
   console.log('====================================================');

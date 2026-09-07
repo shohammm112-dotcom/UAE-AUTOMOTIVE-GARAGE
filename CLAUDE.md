@@ -10,16 +10,15 @@ Treat the repository itself as authoritative. Do not assume previous agent repor
 
 The current local `main` checkpoint is:
 
-- Commit message: `fix: harden appointment domain and authorization`
+- Commit message: `feat: add staff appointment operations`
   (find it with `git log --oneline -1`)
-- Parent: `6961bfe` (`docs: record verified Phase 6 discovery findings`).
-- This checkpoint carries Phase 6.1 — appointment domain hardening. The P0
-  (any staff role could cancel any customer's appointment) was reproduced over
-  the service layer before being fixed, and every fix was adversarially
-  re-tested afterwards.
-- Verification at this checkpoint: `npm test` 134/134 (exit 0), `npm run lint`
+- Parent: `5b7d26f` (`fix: harden appointment domain and authorization`), which
+  closed Phase 6.1.
+- This checkpoint carries Phase 6.2 — staff appointment operations: the staff
+  queue, complete, no-show and reschedule.
+- Verification at this checkpoint: `npm test` 158/158 (exit 0), `npm run lint`
   exit 0, `npm run build` exit 0 with one pre-existing non-blocking Vite
-  chunk-size warning (~501 kB). See debt #15.
+  chunk-size warning (~507 kB). See debt #15.
 
 ### Current phase
 
@@ -27,12 +26,13 @@ Phase 5 — Workshop Execution — is CLOSED. Phases 0-4 (governance, public
 website, customer portal, commercial core, staff/workshop foundation) are
 landed.
 
-Phase 6.1 — Appointment Domain Hardening — is CLOSED (this checkpoint).
+Phase 6.1 — Appointment Domain Hardening — is CLOSED (`5b7d26f`).
+Phase 6.2 — Staff Appointment Operations — is CLOSED (this checkpoint).
 
-Phase 6.2 (Staff Appointment Operations) has NOT been started and must not be
-started implicitly. Phase 6.1 deliberately shipped only the foundation: no
-capacity model, no calendar/scheduling UI, no notifications, no reschedule, and
-no appointment-to-Job creation.
+Phase 6.3+ has NOT been started and must not be started implicitly. Still
+deliberately absent: capacity model, bays, technician availability, working
+hours, calendar/slot-search UI, notifications, appointment-to-Job creation
+(#36), check-in, and booking-concurrency control (#38).
 
 Note on phase numbering: the delivery plan uses numeric phases 0-9. The
 "Proposed Forward Roadmap" section further down uses an older lettered A-H
@@ -643,6 +643,64 @@ CANNOT be used for write work — they spawn the CLIs with no approval flags, so
 the child blocks on an interactive prompt forever at 0% CPU while appearing to
 work. Drive `codex exec --approve-for-me` directly instead.
 
+### Step 6.2 — Staff Appointment Operations
+
+Gives staff an operational surface over the 6.1 foundation.
+
+Delivered:
+
+1. **Staff queue.** `GET /internal/appointments` (optional `?status=` filter)
+   behind `workshopStaffGuard`, via the pre-existing
+   `IAppointmentRepository.listAll()`. An unknown `status` value is rejected with
+   `ValidationFailedError` (400) rather than silently returning everything.
+2. **Complete / no-show.** `staffCompleteAppointment` and `staffMarkNoShow`
+   plus `POST /internal/appointments/:id/{complete,no-show}`. Closes debt #35 —
+   all five `AppointmentStatus` values are now reachable at runtime.
+3. **Reschedule.** `Appointment.reschedule(date, slot)` reusing the SAME
+   structural validators as the constructor, refusing terminal states, plus
+   `staffRescheduleAppointment` and `POST /internal/appointments/:id/reschedule`.
+4. **Staff UI.** `src/app/routes/staff/StaffAppointmentsPage.tsx` with status
+   filter pills and per-row actions, registered in `router.tsx` and `StaffShell`.
+5. **24 regression tests**, 134 -> 158.
+
+Authorization model (deliberate asymmetry):
+
+- **Read is wider than write.** The queue uses `workshopStaffGuard` (all six
+  roles, technicians and mechanics included) because a technician needs to see
+  the day's schedule. Every mutation stays on the four-role commercial set.
+  This is NOT the debt #10 mistake — that concerns the commercial *ledger*,
+  where a technician has no business; scheduling is operational data.
+
+Reschedule policy: rescheduling a `confirmed` appointment RESETS it to
+`requested`, because a moved slot must be re-confirmed by the workshop; keeping
+`confirmed` would assert a commitment nobody made. Rescheduling a `requested`
+one leaves it `requested`. Terminal appointments cannot be rescheduled.
+
+The 6.1 validation split is preserved and re-verified: `Appointment.reschedule`
+performs structural checks only, and the past-date policy lives in
+`staffRescheduleAppointment` via `todayInGst(this.clock())`. A regression test
+confirms a past-dated historical appointment still rehydrates through the mapper.
+
+Implementation note: `preferredDate`/`preferredTimeSlot` moved from public
+`readonly` fields to private backing fields with getters (TypeScript forbids
+reassigning `readonly` outside the constructor). This matches the entity's
+existing `_status`/`get status()` idiom; the external read API is unchanged.
+
+Verification: `npm test` 158/158, `npm run lint` exit 0, `npm run build` exit 0
+(~507 kB chunk warning, debt #15). Independent 35-check adversarial script:
+technicians/mechanics allowed on the queue read but blocked on every mutation,
+customers blocked everywhere, unknown status filters rejected, terminal
+reschedule refused, malformed and past dates refused, and both 6.1 regressions
+(mapper rehydration, technician blocked on the customer cancel route) intact.
+Browser-verified: correct rendering, and action buttons exactly mirror
+`LEGAL_TRANSITIONS` (5 actions across 2 actionable rows, 3 terminal rows inert).
+
+Delegation note: the frontend was implemented by `agy` on Claude Sonnet 4.6
+(Thinking); the backend by a Claude Sonnet subagent after `codex` stalled. See
+the tooling note in Step 6.1 — `codex exec` ALSO blocks forever when its stdin
+is an open pipe, printing only "Reading additional input from stdin...". Always
+redirect `< /dev/null`.
+
 ## Appointment Time Model (recorded 2026-09-07)
 
 Explicit, because Phase 6.2+ scheduling depends on it:
@@ -902,8 +960,11 @@ FUNCTIONAL GAPS (genuine Phase 6 scope):
     (`admin`, `workshop_manager`, `service_advisor`, `advisor`), and the service
     role list was corrected to match. Verified: `service_advisor` can now confirm;
     `technician`/`mechanic` get 403.
-35. **`Appointment.complete()` and `markNoShow()` have zero callers.** Four of
-    the five `AppointmentStatus` values are unreachable at runtime.
+35. RESOLVED (Phase 6.2) — `Appointment.complete()` and `markNoShow()` had zero
+    callers, leaving four of the five `AppointmentStatus` values unreachable at
+    runtime. They now have service methods and routes
+    (`staffCompleteAppointment`, `staffMarkNoShow`), so all five statuses are
+    reachable.
 36. **There is no job-creation path anywhere in the application.** No service or
     route ever calls `jobRepo.save()`; `new Job(...)` appears only in the
     Firestore mapper (rehydration) and in tests. Every Job in the system today

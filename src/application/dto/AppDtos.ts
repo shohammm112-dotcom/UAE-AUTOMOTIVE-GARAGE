@@ -63,6 +63,11 @@ export interface RequestAppointmentDto {
   readonly customerNotes?: string;
 }
 
+export interface RescheduleAppointmentDto {
+  readonly preferredDate: string;
+  readonly preferredTimeSlot: AppointmentTimeSlot;
+}
+
 export interface AppointmentResponseDto {
   readonly id: string;
   readonly customerId: string;

@@ -3,8 +3,9 @@ import { IVehicleRepository } from '../../domain/repositories/IVehicleRepository
 import { Appointment } from '../../domain/entities/Appointment.ts';
 import { AuthenticatedContext } from '../security/AuthenticatedContext.ts';
 import { AuthorizationGuard } from '../security/AuthorizationGuard.ts';
-import { AppointmentResponseDto, RequestAppointmentDto } from '../dto/AppDtos.ts';
+import { AppointmentResponseDto, RequestAppointmentDto, RescheduleAppointmentDto } from '../dto/AppDtos.ts';
 import { ResourceNotFoundError, ValidationFailedError } from '../errors/ApplicationError.ts';
+import { isAppointmentStatus } from '../../domain/stateMachines/AppointmentStateMachine.ts';
 
 /** GST is fixed at UTC+4 for Asia/Dubai and has no daylight-saving time. */
 export function todayInGst(now: Date = new Date()): string {
@@ -131,6 +132,117 @@ export class AppointmentApplicationService {
     }
 
     appointment.cancel();
+    await this.appointmentRepo.update(appointment);
+    return this.toDto(appointment);
+  }
+
+  /**
+   * Workshop staff view of the appointment queue. READ is intentionally WIDER
+   * than the mutation endpoints: a technician needs to see the day's schedule
+   * even though only commercial staff may confirm/cancel/complete/reschedule.
+   */
+  public async listAppointmentsForStaff(
+    context: AuthenticatedContext,
+    filter?: { status?: string }
+  ): Promise<AppointmentResponseDto[]> {
+    AuthorizationGuard.assertStaffRole(context, [
+      'admin',
+      'workshop_manager',
+      'service_advisor',
+      'advisor',
+      'technician',
+      'mechanic',
+    ]);
+
+    const appointments = await this.appointmentRepo.listAll();
+
+    if (filter?.status !== undefined) {
+      if (!isAppointmentStatus(filter.status)) {
+        throw new ValidationFailedError(`Unknown appointment status filter: ${filter.status}`);
+      }
+      const status = filter.status;
+      return appointments.filter((a) => a.status === status).map((a) => this.toDto(a));
+    }
+
+    return appointments.map((a) => this.toDto(a));
+  }
+
+  /** Workshop commercial staff marks an appointment as completed. */
+  public async staffCompleteAppointment(
+    context: AuthenticatedContext,
+    appointmentId: string
+  ): Promise<AppointmentResponseDto> {
+    AuthorizationGuard.assertStaffRole(context, [
+      'admin',
+      'workshop_manager',
+      'service_advisor',
+      'advisor',
+    ]);
+
+    const appointment = await this.appointmentRepo.findById(appointmentId);
+    if (!appointment) {
+      throw new ResourceNotFoundError('Appointment', appointmentId);
+    }
+
+    appointment.complete();
+    await this.appointmentRepo.update(appointment);
+    return this.toDto(appointment);
+  }
+
+  /** Workshop commercial staff marks an appointment as a no-show. */
+  public async staffMarkNoShow(
+    context: AuthenticatedContext,
+    appointmentId: string
+  ): Promise<AppointmentResponseDto> {
+    AuthorizationGuard.assertStaffRole(context, [
+      'admin',
+      'workshop_manager',
+      'service_advisor',
+      'advisor',
+    ]);
+
+    const appointment = await this.appointmentRepo.findById(appointmentId);
+    if (!appointment) {
+      throw new ResourceNotFoundError('Appointment', appointmentId);
+    }
+
+    appointment.markNoShow();
+    await this.appointmentRepo.update(appointment);
+    return this.toDto(appointment);
+  }
+
+  /**
+   * Workshop commercial staff reschedules an appointment to a new preferred
+   * date/time slot. The past-date policy is applied here (exactly as
+   * requestAppointment applies it) — NOT in the entity, because the entity's
+   * structural validators are also exercised when rehydrating historical
+   * appointments through the Firestore mapper.
+   */
+  public async staffRescheduleAppointment(
+    context: AuthenticatedContext,
+    appointmentId: string,
+    dto: RescheduleAppointmentDto
+  ): Promise<AppointmentResponseDto> {
+    AuthorizationGuard.assertStaffRole(context, [
+      'admin',
+      'workshop_manager',
+      'service_advisor',
+      'advisor',
+    ]);
+
+    const today = todayInGst(this.clock());
+    if (dto.preferredDate < today) {
+      throw new ValidationFailedError(
+        `Preferred date cannot be in the past. Today in GST is ${today}`
+      );
+    }
+
+    const appointment = await this.appointmentRepo.findById(appointmentId);
+    if (!appointment) {
+      throw new ResourceNotFoundError('Appointment', appointmentId);
+    }
+
+    appointment.reschedule(dto.preferredDate, dto.preferredTimeSlot);
     await this.appointmentRepo.update(appointment);
     return this.toDto(appointment);
   }

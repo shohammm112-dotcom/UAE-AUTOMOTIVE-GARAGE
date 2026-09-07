@@ -37,6 +37,7 @@ import { StaffEstimateDetailPage } from "./routes/staff/StaffEstimateDetailPage"
 import { StaffInvoicesPage } from "./routes/staff/StaffInvoicesPage";
 import { StaffInvoiceCreatePage } from "./routes/staff/StaffInvoiceCreatePage";
 import { StaffInvoiceDetailPage } from "./routes/staff/StaffInvoiceDetailPage";
+import { StaffAppointmentsPage } from "./routes/staff/StaffAppointmentsPage";
 
 export const router = createBrowserRouter([
   {
@@ -78,6 +79,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/staff/dashboard" replace /> },
       { path: "dashboard", element: <StaffDashboardPage /> },
+      { path: "appointments", element: <StaffAppointmentsPage /> },
       { path: "customers", element: <StaffCustomersPage /> },
       { path: "customers/:id", element: <StaffCustomerDetailPage /> },
       { path: "vehicles/:id", element: <StaffVehicleDetailPage /> },

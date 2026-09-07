@@ -85,6 +85,60 @@ export function createInternalRoutes(container: AppContainer): Router {
   });
 
   /**
+   * POST /api/v1/internal/appointments/:id/complete
+   * Marks an appointment as completed.
+   */
+  router.post('/appointments/:id/complete', authMiddleware.requireAuth(), commercialStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const appointment = await container.services.appointmentService.staffCompleteAppointment(
+        req.context!,
+        req.params.id
+      );
+      res.json({ appointment });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * POST /api/v1/internal/appointments/:id/no-show
+   * Marks an appointment as a no-show.
+   */
+  router.post('/appointments/:id/no-show', authMiddleware.requireAuth(), commercialStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const appointment = await container.services.appointmentService.staffMarkNoShow(
+        req.context!,
+        req.params.id
+      );
+      res.json({ appointment });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * POST /api/v1/internal/appointments/:id/reschedule
+   * Moves an appointment to a new preferred date/time slot.
+   */
+  router.post('/appointments/:id/reschedule', authMiddleware.requireAuth(), commercialStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const { preferredDate, preferredTimeSlot } = req.body;
+      if (!preferredDate || !preferredTimeSlot) {
+        throw new ValidationFailedError('preferredDate and preferredTimeSlot are required');
+      }
+
+      const appointment = await container.services.appointmentService.staffRescheduleAppointment(
+        req.context!,
+        req.params.id,
+        { preferredDate, preferredTimeSlot }
+      );
+      res.json({ appointment });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
    * POST /api/v1/internal/estimates
    * Workshop staff creates a draft estimate through EstimateApplicationService (SEC-HIGH-04).
    */
@@ -220,6 +274,25 @@ export function createInternalRoutes(container: AppContainer): Router {
     try {
       const invoices = await container.services.invoiceService.getAllInvoices(req.context!);
       res.json({ invoices });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * GET /api/v1/internal/appointments
+   * Workshop staff queue. READ is intentionally wider than the mutation
+   * endpoints above (workshopStaffGuard, not commercialStaffGuard): a
+   * technician needs to see the day's schedule.
+   */
+  router.get('/appointments', authMiddleware.requireAuth(), workshopStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+      const appointments = await container.services.appointmentService.listAppointmentsForStaff(
+        req.context!,
+        status !== undefined ? { status } : undefined
+      );
+      res.json({ appointments });
     } catch (err) {
       next(err);
     }

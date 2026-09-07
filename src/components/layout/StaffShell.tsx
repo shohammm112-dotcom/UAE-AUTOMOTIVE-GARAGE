@@ -7,13 +7,15 @@ import {
   LogOut, 
   ShieldCheck,
   Building,
-  Users
+  Users,
+  CalendarClock
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Workshop Board", href: "/staff/dashboard" },
+  { icon: CalendarClock, label: "Appointments", href: "/staff/appointments" },
   { icon: Users, label: "Customers", href: "/staff/customers" },
   { icon: Wrench, label: "Job Queue", href: "/staff/jobs" },
   { icon: FileText, label: "Estimates", href: "/staff/estimates" },
