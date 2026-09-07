@@ -769,6 +769,90 @@ Open items, highest value first:
     a verification error.** Currently dead code — zero routes reference it — but
     it is a fail-open shape sitting in the auth middleware.
 
+### Discovered during Phase 6 discovery (six-agent audit, HEAD 7074803)
+
+These are VERIFIED findings from the appointment-domain audit. None were fixed —
+Phase 6 is not authorised to begin. Several are live bugs in shipped code and
+are NOT Phase 6 feature work; they are pre-existing defects that discovery
+surfaced.
+
+LIVE BUGS (shipping today):
+
+27. **Every appointment renders "Invalid Date".** `AppointmentsPage.tsx:185,188`
+    and `DashboardPage.tsx:138` read `apt.scheduledAt`. That field does not exist
+    anywhere in the backend — the DTO carries `preferredDate` and
+    `preferredTimeSlot`. `new Date(undefined)` is `Invalid Date`, so both
+    surfaces where a customer checks when their car is due are unreadable.
+    Independently found by three agents and confirmed by direct grep. Same
+    defect class as debt #4, different field.
+28. **Appointment notes never display.** `AppointmentsPage.tsx:202` reads
+    `apt.notes`; the DTO field is `customerNotes`.
+29. **`AppointmentResponseDto.status` is a bare `string`** (`AppDtos.ts:70`),
+    not `AppointmentStatus`. This is why #27/#28 and the `'scheduled'` literals
+    fixed in Step 5.7 were invisible to `tsc`. Both appointment pages also use
+    `useApi<{ appointments: any[] }>`, the twin of debt #8. The Step 5.7 drift
+    guard catches `.status === 'literal'` comparisons but NOT property reads of
+    fields that do not exist — that gap is how #27 survived.
+
+SECURITY (least-privilege, pre-existing, NOT introduced by Step 5.7):
+
+30. **Any authenticated staff member — including `technician` and `mechanic` —
+    can cancel ANY customer's appointment.** `appointmentRoutes.ts:47` mounts
+    only `requireAuth()` with no role guard, and
+    `AuthorizationGuard.assertCustomerOwnsEntity` early-returns for
+    `actorType === 'staff'` (`AuthorizationGuard.ts:24`). Proven empirically over
+    HTTP: technician, mechanic and advisor tokens each returned 200 and the
+    appointment moved to `cancelled`.
+31. **Same guard, same shape: any staff member can rewrite any customer's
+    odometer.** `PATCH /api/v1/vehicles/:id/mileage` (`vehicleRoutes.ts:65`,
+    `requireAuth()` only) reaches `VehicleApplicationService.ts:85`, which uses
+    the same staff-early-return guard. Proven: 40000 -> 999999 with a technician
+    token. Odometer readings are commercially significant in the UAE resale
+    market. This is NOT appointment scope and should be triaged on its own.
+32. **`assertCustomerOwnsEntity` is misnamed for what it does.** Its name and its
+    comment ("may inspect") both read as a read-only ownership check, but it
+    permits staff to perform destructive writes at every call site. ~14 call
+    sites. Splitting it into a strict variant and a staff-readable variant would
+    have made #30 and #31 visible on sight.
+33. **403/404 enumeration oracle** on appointment cancel and on the other
+    customer-owned reads: `findById`/404 precedes the ownership assertion.
+
+FUNCTIONAL GAPS (genuine Phase 6 scope):
+
+34. **No appointment can ever be confirmed.** `staffConfirmAppointment` exists
+    (`AppointmentApplicationService.ts:78-92`) but NO route reaches it, and
+    `internalRoutes.ts` has zero appointment endpoints. So `requested ->
+    confirmed` is unreachable in production; every appointment is permanently
+    `requested` or `cancelled`. Its inline role list
+    `['advisor','workshop_manager','admin']` also omits `service_advisor`,
+    matching neither canonical guard — an instance of debt #12 producing a real
+    behavioural inconsistency.
+35. **`Appointment.complete()` and `markNoShow()` have zero callers.** Four of
+    the five `AppointmentStatus` values are unreachable at runtime.
+36. **There is no job-creation path anywhere in the application.** No service or
+    route ever calls `jobRepo.save()`; `new Job(...)` appears only in the
+    Firestore mapper (rehydration) and in tests. Every Job in the system today
+    must be seed data or a direct database write. `Job.appointmentId` exists and
+    is persisted but is never populated and is absent from `JobResponseDto`.
+    **Phase 6's largest item is therefore not scheduling — it is job creation,
+    which this product has never had.**
+37. **No capacity model of any kind** — no bays, technician availability,
+    working hours, or service durations. No timezone handling anywhere, for a
+    UAE (GST, UTC+4) business.
+38. **No appointment concurrency or idempotency control.** Both repositories use
+    unconditional last-write-wins `set()`. Two customers can silently book the
+    same slot. The transactional lock-document pattern already proven in
+    `FirestoreApprovalRepository` is not applied here.
+39. **`preferredTimeSlot` has three disagreeing vocabularies**: the entity
+    comments `"09:00 - 11:00"`, the UI sends `"Morning"/"Afternoon"/"Evening"`,
+    and the dead `types/api.ts` declares `'morning' | 'afternoon'`. No format
+    validation exists at any layer. Choosing the canonical vocabulary AFTER real
+    bookings exist would force a migration with no reliable mapping.
+40. **Appointment test coverage is one state-machine unit test**
+    (`stateMachines.test.ts:53-63`). No entity, service, route, repository,
+    ownership or concurrency tests. Findings #30 and #34 are invisible to
+    `npm test`.
+
 Do not bundle these into unrelated feature work without explicit scope.
 
 ## Engineering Workflow
