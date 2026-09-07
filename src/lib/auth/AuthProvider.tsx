@@ -47,6 +47,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const loginWithMockDevToken = async () => {
+    // Dev-only affordance. Vite replaces `import.meta.env.DEV` with `false` at
+    // build time, so everything below is unreachable in a production bundle and
+    // is stripped by minification - the token literal never ships.
+    if (!import.meta.env.DEV) return;
     setIsLoading(true);
     // In the real system, this would trigger Firebase OAuth/Popup.
     // For now, we inject a token that the MockAuthTokenVerifier in the backend will accept.
@@ -58,6 +62,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginWithStaffDevToken = async (role: "advisor" | "manager") => {
+    // Dev-only affordance - see loginWithMockDevToken. These two token strings
+    // grant `advisor` and `workshop_manager`+`admin` respectively, so they must
+    // never reach a production bundle.
+    if (!import.meta.env.DEV) return;
     setIsLoading(true);
     const mockToken = role === "manager" ? "test-token-staff-manager" : "test-token-staff-advisor";
     TokenProvider.setToken(mockToken);

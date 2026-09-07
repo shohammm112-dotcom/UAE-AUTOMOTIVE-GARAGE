@@ -1,15 +1,21 @@
+import 'dotenv/config';
 import path from 'path';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import { createApplicationContainer } from './src/infrastructure/di/container.ts';
 import { createExpressApp } from './src/server/app.ts';
+import { RuntimeEnvironment } from './src/infrastructure/config/RuntimeEnvironment.ts';
 
 async function startServer() {
   const container = createApplicationContainer();
   const app = createExpressApp(container);
   const PORT = 3000;
 
-  if (process.env.NODE_ENV !== 'production') {
+  // SECURITY: in non-production this mounts Vite in middleware mode, which serves
+  // the raw source tree - including src/infrastructure/mock/MockAuthTokenVerifier.ts
+  // and its seeded credentials. Keyed on RuntimeEnvironment rather than NODE_ENV
+  // because nothing sets NODE_ENV, so a built artifact previously took this branch.
+  if (!RuntimeEnvironment.isProduction()) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',

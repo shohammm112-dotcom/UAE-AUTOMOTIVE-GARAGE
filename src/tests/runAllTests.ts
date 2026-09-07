@@ -12,6 +12,8 @@ import { runStaffMasterDataTests } from './staffMasterData.test.ts';
 import { runStaffOperationalListsTests } from './staffOperationalLists.test.ts';
 import { runStaffJobOperationsTests } from './staffJobOperations.test.ts';
 import { runJobLifecycleConsistencyTests } from './jobLifecycleConsistency.test.ts';
+import { runProductionAuthSafetyTests } from './productionAuthSafety.test.ts';
+import { runEstimateApprovalIntegrityTests } from './estimateApprovalIntegrity.test.ts';
 
 export async function runAllTests(): Promise<{ passed: boolean; summary: string }> {
   console.log('====================================================');
@@ -33,6 +35,8 @@ export async function runAllTests(): Promise<{ passed: boolean; summary: string 
   await runStaffOperationalListsTests(runner);
   await runStaffJobOperationsTests(runner);
   await runJobLifecycleConsistencyTests(runner);
+  await runProductionAuthSafetyTests(runner);
+  await runEstimateApprovalIntegrityTests(runner);
 
   const summary = runner.getSummary();
   console.log('====================================================');

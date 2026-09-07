@@ -11,6 +11,7 @@ import {
   InvalidStateTransitionError,
   InvariantViolationError,
 } from '../../domain/errors/DomainError.ts';
+import { RuntimeEnvironment } from '../../infrastructure/config/RuntimeEnvironment.ts';
 
 export function errorHandlerMiddleware(
   err: Error,
@@ -47,6 +48,10 @@ export function errorHandlerMiddleware(
     statusCode = 400;
     errorCode = 'VALIDATION_FAILED';
     message = err.message;
+  } else if (err.name === 'CorsOriginNotAllowedError') {
+    statusCode = 403;
+    errorCode = 'CORS_ORIGIN_FORBIDDEN';
+    message = err.message;
   } else if (err.name === 'ConflictError' || err.name === 'ConcurrencyConflictError') {
     statusCode = 409;
     errorCode = 'CONFLICT';
@@ -58,7 +63,7 @@ export function errorHandlerMiddleware(
   } else {
     // Unhandled exception: do not leak server stack in production
     console.error('[Unhandled API Error]', err);
-    message = process.env.NODE_ENV === 'production'
+    message = RuntimeEnvironment.isProduction()
       ? 'An unexpected server error occurred'
       : err.message || 'Internal Server Error';
   }

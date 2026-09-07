@@ -1,10 +1,22 @@
 import { IAuthTokenVerifier, VerifiedAuthIdentity } from '../../application/security/IAuthTokenVerifier.ts';
 import { AuthenticationRequiredError } from '../../application/errors/ApplicationError.ts';
+import { RuntimeEnvironment } from '../config/RuntimeEnvironment.ts';
 
 export class MockAuthTokenVerifier implements IAuthTokenVerifier {
   private readonly validTokens = new Map<string, VerifiedAuthIdentity>();
 
   constructor() {
+    // SECURITY: defence in depth behind the composition-root guard in
+    // container.ts. This class seeds hardcoded tokens that grant staff and
+    // admin roles, so it must never be instantiable in a production process,
+    // by any code path.
+    if (RuntimeEnvironment.isProduction()) {
+      throw new Error(
+        '[FATAL] MockAuthTokenVerifier must never be constructed in a production environment. ' +
+          'It seeds hardcoded tokens that grant administrative access.'
+      );
+    }
+
     // Default seed test tokens for development and unit testing
     this.validTokens.set('test-token-alice', {
       uid: 'firebase_uid_alice',

@@ -1,8 +1,34 @@
 import helmet from 'helmet';
 import cors from 'cors';
 import { Request, Response, NextFunction } from 'express';
+import { RuntimeEnvironment } from '../../infrastructure/config/RuntimeEnvironment.ts';
+
+/**
+ * Raised when an Origin is rejected by the CORS policy. Named so that
+ * errorHandlerMiddleware can map it to 403; without it the generic `cors`
+ * Error fell off the end of the handler's instanceof ladder and every
+ * cross-origin browser request in production answered 500.
+ */
+class CorsOriginNotAllowedError extends Error {
+  constructor(origin: string) {
+    super(`CORS policy does not allow access from origin: ${origin}`);
+    this.name = 'CorsOriginNotAllowedError';
+  }
+}
 
 export function createSecurityMiddleware() {
+  // Fail closed at startup rather than at first request. In production the
+  // localhost defaults below match nothing a real browser will send - including
+  // the app's own origin - so an unset ALLOWED_ORIGINS means every state-changing
+  // request fails. Surfacing that at boot makes it a five-second diagnosis
+  // instead of an intermittent-looking runtime fault.
+  if (RuntimeEnvironment.isProduction() && !process.env.ALLOWED_ORIGINS?.trim()) {
+    throw new Error(
+      '[FATAL] Refusing to start: ALLOWED_ORIGINS must be set in production. ' +
+        'Provide a comma-separated list of browser origins permitted to call this API.'
+    );
+  }
+
   const helmetMiddleware = helmet({
     contentSecurityPolicy: false, // Vite SPA in dev needs inline scripts; frontend serves separate headers
     crossOriginEmbedderPolicy: false,
@@ -17,11 +43,11 @@ export function createSecurityMiddleware() {
         ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
         : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:5173'];
 
-      if (process.env.NODE_ENV !== 'production' || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      if (!RuntimeEnvironment.isProduction() || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
         return callback(null, true);
       }
 
-      return callback(new Error(`CORS policy does not allow access from origin: ${origin}`));
+      return callback(new CorsOriginNotAllowedError(origin));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

@@ -3,6 +3,7 @@ import { useApi } from "@/lib/api/hooks";
 import { ApiClient } from "@/lib/api/client";
 import { Calendar, Plus, AlertCircle, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AppointmentStateMachine } from "@/domain/stateMachines/AppointmentStateMachine";
 
 export const AppointmentsPage: React.FC = () => {
   const { data, isLoading, error, refetch } = useApi<{ appointments: any[] }>("/appointments");
@@ -191,15 +192,16 @@ export const AppointmentsPage: React.FC = () => {
                 <div className="flex justify-between items-start">
                   <div>
                     <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium mb-3 capitalize
-                      ${apt.status === 'scheduled' ? 'bg-blue-100 text-blue-700' : 
-                         apt.status === 'completed' ? 'bg-green-100 text-green-700' : 
+                      ${apt.status === 'confirmed' ? 'bg-blue-100 text-blue-700' :
+                         apt.status === 'requested' ? 'bg-amber-100 text-amber-700' :
+                         apt.status === 'completed' ? 'bg-green-100 text-green-700' :
                          apt.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-zinc-100 text-zinc-700'}`}>
-                      {apt.status}
+                      {String(apt.status).replace(/_/g, ' ')}
                     </span>
                     <h3 className="font-medium text-zinc-900 mb-1">{apt.serviceType?.replace(/_/g, ' ') || 'General Service'}</h3>
                     {apt.notes && <p className="text-sm text-zinc-500 line-clamp-2">{apt.notes}</p>}
                   </div>
-                  {apt.status === 'scheduled' && (
+                  {AppointmentStateMachine.canTransition(apt.status, 'cancelled') && (
                     <Button variant="outline" size="sm" onClick={() => handleCancel(apt.id)} className="text-red-600 hover:text-red-700 hover:bg-red-50">
                       Cancel
                     </Button>

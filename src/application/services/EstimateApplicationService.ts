@@ -241,14 +241,41 @@ export class EstimateApplicationService {
       throw new ValidationFailedError('Decision list cannot be empty');
     }
 
-    // Validate that all item IDs match canonical items
+    // Validate that all item IDs match canonical items, that no item is decided
+    // twice, and that every decision is a legal literal.
+    //
+    // Duplicates matter because the two consumers below disagree on how to resolve
+    // them: the snapshot builder takes the FIRST match while
+    // Estimate.applyCustomerDecision builds a Map and therefore takes the LAST.
+    // A payload naming one item twice with opposing decisions produced an approval
+    // record, and a downstream tax invoice, whose line items contradicted their own
+    // totals.
+    //
+    // The decision literal matters because nothing downstream validated it: the
+    // domain treats any value other than 'approved' as a rejection, so a typo or a
+    // missing field silently rejected the line. Combined with the unconditional
+    // lock, that terminally destroyed the estimate at zero approved value with no
+    // supersession path to recover it.
     const canonicalItemIds = new Set(estimate.items.map((i) => i.id));
+    const seenItemIds = new Set<string>();
     for (const d of dto.decisions) {
       if (!canonicalItemIds.has(d.itemId)) {
         throw new ValidationFailedError(
           `Item ID "${d.itemId}" does not exist on Estimate ${estimate.id}`
         );
       }
+      if (d.decision !== 'approved' && d.decision !== 'rejected') {
+        throw new ValidationFailedError(
+          `Invalid decision "${d.decision}" for item "${d.itemId}" on Estimate ${estimate.id}. ` +
+            `Expected "approved" or "rejected".`
+        );
+      }
+      if (seenItemIds.has(d.itemId)) {
+        throw new ValidationFailedError(
+          `Duplicate decision submitted for item "${d.itemId}" on Estimate ${estimate.id}`
+        );
+      }
+      seenItemIds.add(d.itemId);
     }
 
     // Mandatory items check: If an item is safety-critical / mandatory, customer cannot reject it without acknowledgement

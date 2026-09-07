@@ -10,17 +10,27 @@ Treat the repository itself as authoritative. Do not assume previous agent repor
 
 The current local `main` checkpoint is:
 
-- Commit: `f02b3fc707396ef29d1ddbce61666b0c34b9710b`
-- Commit message: `fix(staff): align staff portal with authoritative JobStateMachine`
-- Parent: `cf23d60` (`feat: add staff endpoints for all system entities`), which carried the Step 5.4 + Step 5.5 staff operational work.
-- This checkpoint contains the committed Step 5.5 staff-side correction.
-- `main` is AHEAD of `origin/main` by this commit. It has not been pushed.
+- Commit message: `fix: harden authentication and restore estimate approval`
+  (find it with `git log --oneline -1`)
+- Parent: `a099b7f` (`fix: close job lifecycle consistency across portals`), which
+  closed the Phase 5 job-lifecycle work.
+- This checkpoint carries the P0 authentication remediation and the P1 customer
+  estimate-approval remediation. Both were reproduced before being fixed and
+  adversarially re-tested afterwards.
+- Verification at this checkpoint: `npm test` 120/120 (exit 0), `npm run lint`
+  exit 0, `npm run build` exit 0 with one pre-existing non-blocking Vite
+  chunk-size warning (~500 kB). See debt #15.
 
 ### Current phase
 
-Phase 5 — Workshop Execution. Phases 0-4 (governance, public website, customer
-portal, commercial core, staff/workshop foundation) are landed. Phase 6
-(Scheduling) has NOT been started and must not be started implicitly.
+Phase 5 — Workshop Execution — is CLOSED. Phases 0-4 (governance, public
+website, customer portal, commercial core, staff/workshop foundation) are
+landed.
+
+Phase 6 (Appointments / Scheduling) has NOT been started. It is awaiting
+discovery and human review, and must not be started implicitly. No Phase 6
+migration, UI, API or architectural commitment may be created before that
+review.
 
 Note on phase numbering: the delivery plan uses numeric phases 0-9. The
 "Proposed Forward Roadmap" section further down uses an older lettered A-H
@@ -268,6 +278,37 @@ GET  /api/v1/internal/invoices
 
 Commercial mutation routes remain protected by the narrower commercial-staff guard.
 
+## Production vs Mock Authentication (security boundary)
+
+`src/infrastructure/config/RuntimeEnvironment.ts` is the SOLE authority for
+whether the process is production. Do not re-derive this from `process.env`
+anywhere else.
+
+```text
+isProduction() = NODE_ENV/APP_ENV in {production, prod}
+                 OR PRODUCTION_ARTIFACT === 'true'   (baked in by `npm run build`)
+```
+
+Rules:
+
+- Production MUST NOT resolve to mock infrastructure. `createApplicationContainer`
+  throws when it would, which exits the process non-zero via the `startServer`
+  catch in `server.ts`. Failing to boot is the intended behaviour.
+- `MockAuthTokenVerifier` cannot be constructed in production, by any path.
+- Mock authentication remains fully available for development and tests. The
+  opt-in is simply the absence of a production signal, which is why the 25
+  container call sites in the test suite required no changes.
+- The backend is the security boundary. The frontend cannot manufacture a
+  privileged identity: `localStorage.dev_auth_token` is still rehydrated by
+  `AuthProvider`, but a production server runs a real Firebase verifier that
+  rejects seeded tokens (verified: HTTP 401). UI stripping removes the
+  advertisement and the credential; it is defence in depth, not the boundary.
+- Production requires `INFRASTRUCTURE_PROVIDER=firebase` AND `ALLOWED_ORIGINS`.
+  Both are asserted at startup. `ALLOWED_ORIGINS` is enforced because activating
+  real production mode also activates the restrictive CORS branch, which without
+  an allowlist rejects every browser request.
+- `.env` is now actually loaded (`dotenv/config` in `server.ts`).
+
 ## Customer Ownership / Security
 
 Customer-owned data must be protected by backend ownership checks.
@@ -457,6 +498,45 @@ Completed work to date:
 - deep links to related customer/vehicle records
 - security tests for staff job operations
 
+### Step 5.7 — P0 Authentication + P1 Estimate Approval Remediation
+
+Investigated by five parallel agents (auth fail-open, adversarial security, auth
+architecture, estimate approval trace, approval security baseline), then fixed,
+then adversarially re-tested. Both issues were REPRODUCED before being fixed.
+
+Delivered:
+
+1. Fail-closed production authentication (see resolved debt item 0).
+2. Customer estimate approval restored (see resolved debt item 4).
+3. Duplicate `itemId` and invalid `decision` literals now rejected at the service
+   boundary. Both were customer-triggerable HIGHs in the endpoint being fixed:
+   duplicates desynchronised the approval record from the money (the snapshot
+   builder resolved by first match, the domain by last), which could produce a
+   TRN-bearing tax invoice itemising one amount while charging another; an
+   invalid literal was treated as a silent rejection and locked the estimate
+   terminally at zero value.
+4. Three fictional `'scheduled'` appointment-status comparisons removed. Found by
+   the new drift guard, not by hand. `AppointmentStatus` has no such member, so
+   the customer Cancel button never rendered and the dashboard's upcoming list
+   was permanently empty. `AppointmentsPage` now asks
+   `AppointmentStateMachine.canTransition(status, 'cancelled')`.
+5. Removed `item.partNumber` from the estimate page — it exists nowhere in the
+   domain or the DTO, so that line always rendered "N/A". Caught by the new DTO
+   typing.
+6. 26 regression tests across two new suites. Test count 95 -> 120.
+
+Adversarial verification: every guard was reverted one at a time and the suite
+re-run, confirming each test fails against the pre-fix behaviour. Two weaknesses
+in the drift guards were found this way and fixed — a cast (`(x.status as
+string) === 'pending'`) slipped past the regex, and the "consumes isActionable"
+check was satisfied by the word appearing in a comment. Both bypasses are now
+caught. The tests reproduce the historical failure, not merely the happy path.
+
+NOTE: the four second-wave verification agents (security, commercial, domain,
+adversarial) were terminated by an API session limit before returning. Their
+checks were performed inline by the lead instead. Treat that verification as
+single-source and re-run it independently if you want a second opinion.
+
 ## Step 5.5 Correction Context
 
 Known correction items from the latest review:
@@ -524,19 +604,56 @@ inspection report download for customers whose jobs were mid-repair.
 
 These items are known and should not be silently fixed during unrelated work:
 
-RELEASE BLOCKER (P0) — not a Phase 5 item, but must be fixed before ANY
-production deploy:
+RESOLVED (P0) — authentication fail-open, fixed in this checkpoint:
 
-0. **Authentication fails open to mock.** `FirebaseConfig.getProvider()` returns
-   `'firebase'` only when `INFRASTRUCTURE_PROVIDER` is exactly that string, and
-   `'mock'` otherwise — with no production guard. Mock mode installs
-   `MockAuthTokenVerifier`, whose hardcoded `test-token-staff-manager` grants
-   `['workshop_manager','admin']`. That token string ships in the client bundle
-   and `AuthProvider.tsx:62` has a button that sends it. A deploy with the env
-   var unset or misspelled gives any visitor full admin. Fix: hard-fail startup
-   when environment is production and the resolved provider is `mock`, and strip
-   the dev-login affordance from production builds. `GET /api/health` also
-   returns `mode`, handing an attacker the exact signal.
+0. **RESOLVED — authentication no longer fails open to mock.** Previously
+   `FirebaseConfig.getProvider()` resolved to `'mock'` for any value of
+   `INFRASTRUCTURE_PROVIDER` that was not exactly `firebase`, with no environment
+   awareness; mock mode installs `MockAuthTokenVerifier`, whose seeded
+   `test-token-staff-manager` grants `['workshop_manager','admin']`. The token
+   shipped in the browser bundle and the public `/login` page carried an
+   unguarded "Login as Workshop Manager" button. Reproduced end to end, including
+   a privileged write (staff stage advancement) by an anonymous caller.
+
+   The fix, and why it takes the shape it does:
+   - `src/infrastructure/config/RuntimeEnvironment.ts` is the single authority for
+     "is this production?". It is true when `NODE_ENV`/`APP_ENV` says so **or**
+     when `PRODUCTION_ARTIFACT` is baked in. The second signal is load-bearing:
+     nothing in this repository ever set `NODE_ENV` (not the start script, no
+     Dockerfile, no CI), so a guard keyed only on `NODE_ENV` would have been inert
+     on exactly the deployment it exists to protect. `npm run build` bakes the
+     marker into `dist/server.cjs` via `esbuild --define`, compiling
+     `isProductionArtifact()` down to `return true`. **A built artifact therefore
+     cannot be talked out of being production** — verified: `NODE_ENV=development`
+     and `PRODUCTION_ARTIFACT=false` both still refuse to boot.
+   - `container.ts` throws when the resolved mode is `mock` in production. It sits
+     **after** `chosenMode` deliberately, because `options.mode` short-circuits
+     `getProvider()` — a guard inside `FirebaseConfig` alone would leave that path
+     open.
+   - `MockAuthTokenVerifier`'s constructor refuses to run in production (defence
+     in depth).
+   - `server.ts` keys the static-vs-Vite branch on the same authority. Previously
+     a built artifact took the dev branch and served its own source tree over
+     HTTP, so `/src/infrastructure/mock/MockAuthTokenVerifier.ts` returned 200
+     with the admin token in it — an independent second path to admin.
+   - `server.ts` now imports `dotenv/config`. `dotenv` was a declared dependency
+     imported zero times, so `.env` was never read even though `.env.example` and
+     the README told operators to use one. Following the repo's own setup
+     instructions produced the vulnerable state.
+   - `getProvider()` now trims, so `" firebase"` from a YAML/Helm value no longer
+     degrades silently to mock.
+   - The dev-login affordances are gated on `import.meta.env.DEV`, so Vite strips
+     the token literals from the production bundle (verified: zero `test-token-*`
+     hits in `dist/assets/*.js`).
+   - `/api/health` withholds `mode` in production; it previously told an
+     unauthenticated scanner whether an instance was exploitable.
+
+   Regression coverage: `src/tests/productionAuthSafety.test.ts` (13 tests). Each
+   was verified to FAIL when its corresponding guard is reverted.
+
+   Note on blast radius, for accurate incident triage: mock mode also selected
+   mock **repositories**, so this was anonymous-admin plus silent total data loss
+   on every restart — not a Firestore exfiltration path.
 
 Phase 5 lifecycle items — RESOLVED:
 
@@ -546,15 +663,24 @@ Phase 5 lifecycle items — RESOLVED:
 
 Open items, highest value first:
 
-4. **`portal/EstimateDetailPage.tsx` gates on a status the domain cannot
-   produce.** It checks `status === 'draft' || status === 'pending'`, but the
-   actionable value is `pending_customer_decision`. So `isDraftOrPending` is
-   false for every actionable estimate and `handleToggleItem` early-returns —
-   customers likely cannot select line items to approve or reject. The server
-   already sends the correct answer as `EstimateResponseDto.isActionable`; the
-   page ignores it. Same defect class as the JobStage drift, in the estimate
-   lifecycle. This is Phase 3 scope, deliberately NOT fixed in the Phase 5
-   checkpoint, and is probably the most user-visible bug currently known.
+4. RESOLVED — `portal/EstimateDetailPage.tsx` gated on `status === 'draft' ||
+   status === 'pending'`. `'pending'` is not a domain status, so the gate was
+   false for every actionable estimate. The blast radius was wider than
+   previously recorded: it gated FOUR surfaces, not one — the approve/reject
+   controls and the submit button never rendered, the header told the customer
+   the estimate was "locked", and every line item was labelled "Approved". The
+   `handleToggleItem` early-return recorded here was unreachable dead code.
+   The page now consumes the server-computed `EstimateResponseDto.isActionable`,
+   renders each item's real `decision`, and requires an explicit decision on
+   every optional item (previously one selection enabled submit and untouched
+   optional items were silently rejected, locking the estimate irreversibly).
+   Backend was NOT weakened: ownership, staff-impersonation, price authority,
+   immutability, idempotency and concurrency were each re-verified intact.
+
+   Structural cause, now fixed: `EstimateResponseDto.status` was a bare `string`
+   while its sibling `JobResponseDto.stage` had been narrowed to `JobStage` in
+   Step 5.6. It is now `EstimateStatus`, so `=== 'pending'` is a compile error.
+   Coverage: `src/tests/estimateApprovalIntegrity.test.ts` (13 tests).
 5. `src/types/api.ts` is otherwise dead code and should be deleted — see the
    canonical DTO decision above. Its `EstimateResponseDto.status` also
    advertises `pending_review`, which is not a valid `EstimateStatus`.
@@ -595,6 +721,53 @@ Open items, highest value first:
     agent reasoning as comments.
 17. Dev server binds `0.0.0.0` with Vite in middleware mode, so backend source
     is readable over the network in dev.
+
+### Discovered during the Step 5.7 audit (not fixed, deliberately out of scope)
+
+18. **Customer estimate list is unreachable.** `portal/EstimatesPage.tsx` is a
+    hardcoded stub that renders an "API GAP" banner and a permanent empty state;
+    no `GET /api/v1/estimates` route exists. So even with debt #4 fixed, a
+    customer can only reach the estimate page by typing a raw id into the URL.
+    `IEstimateRepository.findByCustomerId` DOES exist — what is missing is a
+    service method, an HTTP route, and a real page. This is feature work, not
+    remediation, which is why it was not bundled into the Step 5.7 fix. It is
+    the highest-value next commercial item.
+19. **Mandatory-item rejection is enforced only in the UI.** The comment at
+    `EstimateApplicationService.ts` claims a mandatory item cannot be rejected
+    without acknowledgement, but the loop below it only checks a decision
+    EXISTS. A crafted request can reject a safety-critical item and lock the
+    estimate. **This needs a business decision** (hard block, or acknowledged
+    override with an audit trail) before it is coded — it is policy, not a bug
+    to silently patch.
+20. **`ApprovalRecord.serverRecordedIp` is attacker-controlled.** `authMiddleware`
+    takes raw `x-forwarded-for` and Express `trust proxy` is never configured.
+    This undermines the non-repudiation value of the immutable audit record.
+    The same missing config makes the rate limiter key on the proxy's IP, so
+    behind a load balancer the entire internet shares one 120 req/min bucket.
+21. **Estimate supersession does not exist.** `version` and `parentEstimateId`
+    are dead fields nothing ever sets; every estimate is version 1. Two pending
+    estimates on one job can both be approved and both invoiced. Combined with
+    `locked` being terminal, there is no path to revise a mistakenly-locked
+    estimate.
+22. **The mock concurrency guard passes for the wrong reason.** The estimate
+    concurrency invariant holds in tests because `MockEstimateRepository` returns
+    the same object instance on every read, so the first writer's in-memory
+    mutation trips the immutability check for everyone else. The real
+    compare-and-swap lives in the Firestore transaction and has NO test coverage.
+    Anyone "hardening" the mock to deep-copy on read would silently drop the
+    invariant while the test keeps passing.
+23. **Idempotency keys provide no mutual exclusion.** `findByKey` then `save` is
+    read-then-write with no create-if-absent and no transaction, in both the mock
+    and Firestore implementations.
+24. **Estimate 403/404 enumeration leak.** `findById`/404 precedes the ownership
+    assertion on both the GET and the decision route, so a caller can distinguish
+    "exists but not yours" from "does not exist".
+25. **`EstimateFirestoreMapper` casts `doc.status as EstimateStatus` unchecked**,
+    exactly parallel to debt #7 for `JobStage`. The DTO narrowing in Step 5.7
+    made the contract honest but added no runtime validation at the I/O boundary.
+26. **`optionalAuth()` in `authMiddleware` degrades to `roles: ['anonymous']` on
+    a verification error.** Currently dead code — zero routes reference it — but
+    it is a fail-open shape sitting in the auth middleware.
 
 Do not bundle these into unrelated feature work without explicit scope.
 
@@ -641,9 +814,11 @@ The following is a BASE ROADMAP for future planning, not a claim that these mile
 ### Phase A — Stabilize the Existing Checkpoint
 
 - DONE — Step 5.5 correction committed as `f02b3fc`
-- DONE — stage-type drift resolved in Step 5.6 (uncommitted at time of writing)
-- OPEN — `origin/main` is not yet aligned; `main` is ahead and unpushed
-- OPEN — retire the dead duplicate DTOs in `src/types/api.ts` (see debt #3/#4)
+- DONE — stage-type drift resolved in Step 5.6, committed as `a099b7f`
+- DONE — `origin/main` aligned; Step 5.6 was pushed
+- DONE — P0 authentication fail-open closed (Step 5.7, debt item 0)
+- DONE — P1 customer estimate approval restored (Step 5.7, debt item 4)
+- OPEN — retire the dead duplicate DTOs in `src/types/api.ts` (see debt #5)
 
 ### Phase B — Customer Journey Completion
 

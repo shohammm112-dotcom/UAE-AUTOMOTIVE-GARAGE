@@ -4,11 +4,12 @@ import { useApi } from "@/lib/api/hooks";
 import { ApiClient } from "@/lib/api/client";
 import { FileText, AlertCircle, CheckCircle2, XCircle, ArrowLeft, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { EstimateResponseDto, EstimateLineItemDto } from "@/application/dto/AppDtos";
 
 export const EstimateDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data, isLoading, error, refetch } = useApi<{ estimate: any }>(`/estimates/${id}`);
+  const { data, isLoading, error, refetch } = useApi<{ estimate: EstimateResponseDto }>(`/estimates/${id}`);
   
   const [selectedItems, setSelectedItems] = useState<Record<string, 'approved' | 'rejected'>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -33,10 +34,16 @@ export const EstimateDetailPage: React.FC = () => {
   }
 
   const estimate = data.estimate;
-  const isDraftOrPending = estimate.status === 'draft' || estimate.status === 'pending';
-  
+  // Authoritative: EstimateApplicationService derives this from
+  // EstimateStateMachine.isActionableByCustomer(), i.e. status ===
+  // 'pending_customer_decision'. Never re-derive the lifecycle on the client.
+  const canDecide = estimate.isActionable;
+
+  const optionalItems = estimate.items.filter((item) => !item.isMandatory);
+  const undecidedOptionalCount = optionalItems.filter((item) => !selectedItems[item.id]).length;
+
   const handleToggleItem = (itemId: string, status: 'approved' | 'rejected') => {
-    if (!isDraftOrPending) return; // Cannot modify sealed estimate
+    if (!canDecide) return; // Cannot modify sealed estimate
     
     setSelectedItems(prev => ({
       ...prev,
@@ -46,7 +53,7 @@ export const EstimateDetailPage: React.FC = () => {
 
   const calculateSelectedTotal = () => {
     let total = 0;
-    estimate.items.forEach((item: any) => {
+    estimate.items.forEach((item) => {
       if (item.isMandatory || selectedItems[item.id] === 'approved') {
         total += item.unitPriceFils * item.quantity;
       }
@@ -59,7 +66,9 @@ export const EstimateDetailPage: React.FC = () => {
       setIsSubmitting(true);
       setSubmitError("");
       
-      const decisions = estimate.items.map((item: any) => ({
+      // Exactly one decision per canonical item, no duplicates, lowercase literals -
+      // the shape the server validates.
+      const decisions = estimate.items.map((item) => ({
         itemId: item.id,
         decision: item.isMandatory ? 'approved' : (selectedItems[item.id] || 'rejected')
       }));
@@ -108,14 +117,16 @@ export const EstimateDetailPage: React.FC = () => {
         <div className="p-6 border-b border-zinc-200 bg-zinc-50">
           <h2 className="text-lg font-semibold">Service Recommendations</h2>
           <p className="text-sm text-zinc-500 mt-1">
-            {isDraftOrPending 
-              ? "Please review and approve the recommended services below." 
-              : "This estimate has been locked and can no longer be modified."}
+            {canDecide
+              ? "Please review and approve the recommended services below."
+              : estimate.isLocked
+                ? "This estimate has been locked and can no longer be modified."
+                : "This estimate is not yet open for your approval."}
           </p>
         </div>
 
         <div className="divide-y divide-zinc-200">
-          {estimate.items.map((item: any) => (
+          {estimate.items.map((item: EstimateLineItemDto) => (
             <div key={item.id} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-zinc-50/50">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
@@ -124,7 +135,10 @@ export const EstimateDetailPage: React.FC = () => {
                     <span className="bg-red-100 text-red-700 text-[10px] uppercase font-bold px-2 py-0.5 rounded">Mandatory</span>
                   )}
                 </div>
-                <p className="text-sm text-zinc-500">Part/Labor: {item.partNumber || 'N/A'}</p>
+                {/* `partNumber` was rendered here but exists nowhere in the domain or
+                    the DTO, so this line always read "N/A". The wire type carries
+                    `type` ('part' | 'labor' | 'consumable'); render that instead. */}
+                <p className="text-sm text-zinc-500 capitalize">{item.type}</p>
               </div>
               
               <div className="flex flex-col sm:items-end gap-3">
@@ -135,7 +149,7 @@ export const EstimateDetailPage: React.FC = () => {
                   )}
                 </div>
                 
-                {isDraftOrPending ? (
+                {canDecide ? (
                   <div className="flex bg-zinc-100 rounded-lg p-1 w-full sm:w-auto">
                     {item.isMandatory ? (
                       <div className="px-4 py-2 text-sm font-medium text-zinc-500 flex items-center w-full justify-center">
@@ -160,8 +174,13 @@ export const EstimateDetailPage: React.FC = () => {
                   </div>
                 ) : (
                   <div className="px-4 py-2 text-sm font-medium flex items-center">
-                    {/* If it's sealed, we can't reliably know what was rejected unless it's in the DTO. Assuming items present were approved. */}
-                    <CheckCircle2 className="w-4 h-4 mr-2 text-green-600" /> Approved
+                    {item.decision === 'approved' ? (
+                      <><CheckCircle2 className="w-4 h-4 mr-2 text-green-600" /> Approved</>
+                    ) : item.decision === 'rejected' ? (
+                      <><XCircle className="w-4 h-4 mr-2 text-red-600" /> Declined</>
+                    ) : (
+                      <span className="text-zinc-500">Awaiting decision</span>
+                    )}
                   </div>
                 )}
               </div>
@@ -176,16 +195,23 @@ export const EstimateDetailPage: React.FC = () => {
             <p className="text-xl font-bold mt-1">Total: AED {((calculateSelectedTotal() * 1.05) / 100).toFixed(2)}</p>
           </div>
           
-          {isDraftOrPending && (
+          {canDecide && (
+            <div className="flex flex-col items-stretch md:items-end gap-2 w-full md:w-auto">
+              {undecidedOptionalCount > 0 && (
+                <p className="text-sm text-amber-700">
+                  Approve or decline {undecidedOptionalCount} remaining item{undecidedOptionalCount === 1 ? '' : 's'} to continue.
+                </p>
+              )}
             <Button 
               size="lg" 
               onClick={handleSubmit} 
-              disabled={isSubmitting || (!Object.keys(selectedItems).length && estimate.items.some((i: any) => !i.isMandatory))}
+              disabled={isSubmitting || undecidedOptionalCount > 0}
               className="w-full md:w-auto"
             >
               {isSubmitting ? <RefreshCw className="w-5 h-5 mr-2 animate-spin" /> : <CheckCircle2 className="w-5 h-5 mr-2" />}
               Submit Approval
             </Button>
+            </div>
           )}
         </div>
       </div>

@@ -80,6 +80,8 @@ export const LoginPage: React.FC = () => {
             <p className="text-zinc-500">Access your digital portal</p>
           </div>
 
+          {import.meta.env.DEV && (
+          <>
           <div className="p-6 bg-blue-50 border border-blue-100 rounded-xl mb-6">
             <h4 className="font-semibold text-blue-900 mb-2">Customer Login (Dev Mode)</h4>
             <button
@@ -91,7 +93,7 @@ export const LoginPage: React.FC = () => {
               {!isLoading && <ArrowRight className="w-4 h-4" />}
             </button>
           </div>
-          
+
           <div className="p-6 bg-zinc-50 border border-zinc-200 rounded-xl mb-8">
             <h4 className="font-semibold text-zinc-900 mb-2 flex items-center gap-2">
               <Wrench className="w-4 h-4" />
@@ -114,7 +116,9 @@ export const LoginPage: React.FC = () => {
               </button>
             </div>
           </div>
-          
+          </>
+          )}
+
           <div className="text-center">
             <p className="text-sm text-zinc-500">
               Don't have an account? <Link to="/contact" className="font-semibold text-zinc-900 hover:underline">Contact us</Link> to register your vehicle.

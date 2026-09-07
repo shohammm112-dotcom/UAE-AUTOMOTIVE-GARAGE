@@ -2,6 +2,7 @@ import express, { Express } from 'express';
 import { AppContainer } from '../infrastructure/di/container.ts';
 import { createSecurityMiddleware } from './middleware/securityMiddleware.ts';
 import { errorHandlerMiddleware } from './middleware/errorHandlerMiddleware.ts';
+import { RuntimeEnvironment } from '../infrastructure/config/RuntimeEnvironment.ts';
 
 import { createAuthRoutes } from './routes/v1/authRoutes.ts';
 import { createCustomerRoutes } from './routes/v1/customerRoutes.ts';
@@ -31,7 +32,9 @@ export function createExpressApp(container: AppContainer): Express {
   app.get('/api/health', (_req, res) => {
     res.json({
       status: 'ok',
-      mode: container.mode,
+      // Withheld in production: `mode` told an unauthenticated caller whether an
+      // instance was running mock authentication, i.e. whether it was exploitable.
+      ...(RuntimeEnvironment.isProduction() ? {} : { mode: container.mode }),
       timestamp: new Date().toISOString(),
       service: 'uae-garage-digital-platform-api',
     });

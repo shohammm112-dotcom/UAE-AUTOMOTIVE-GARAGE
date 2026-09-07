@@ -16,7 +16,7 @@ export class FirebaseConfig {
   }
 
   public static getProvider(): InfrastructureProvider {
-    const provider = (process.env.INFRASTRUCTURE_PROVIDER || '').toLowerCase();
+    const provider = (process.env.INFRASTRUCTURE_PROVIDER || '').trim().toLowerCase();
     if (provider === 'firebase') return 'firebase';
     return 'mock';
   }

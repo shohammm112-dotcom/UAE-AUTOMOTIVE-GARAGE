@@ -10,6 +10,7 @@ import { INotificationRepository } from '../../domain/repositories/INotification
 import { IIdempotencyRepository } from '../../domain/repositories/IIdempotencyRepository.ts';
 import { IEventBus } from '../../domain/events/DomainEvent.ts';
 import { IAuthTokenVerifier } from '../../application/security/IAuthTokenVerifier.ts';
+import { RuntimeEnvironment } from '../config/RuntimeEnvironment.ts';
 
 import { MockCustomerRepository } from '../mock/MockCustomerRepository.ts';
 import { MockVehicleRepository } from '../mock/MockVehicleRepository.ts';
@@ -86,6 +87,21 @@ export interface ContainerCreationOptions {
 
 export function createApplicationContainer(options?: ContainerCreationOptions): AppContainer {
   const chosenMode = options?.mode || (FirebaseConfig.getProvider() === 'firebase' ? 'firebase' : 'mock');
+
+  // SECURITY: production must never fall back to mock infrastructure. Mock mode
+  // installs MockAuthTokenVerifier, whose seeded tokens grant staff/admin roles
+  // to anyone who presents them. Throwing here propagates to the startServer()
+  // catch in server.ts, which exits non-zero - the deployment fails closed
+  // instead of booting with an open door. This check sits after `chosenMode`
+  // deliberately: `options.mode` bypasses getProvider(), so guarding inside
+  // FirebaseConfig alone would leave that path open.
+  if (chosenMode === 'mock' && RuntimeEnvironment.isProduction()) {
+    throw new Error(
+      '[FATAL] Refusing to start: resolved infrastructure mode is "mock" in a production environment. ' +
+        'Mock mode installs seeded authentication tokens that grant administrative access. ' +
+        'Set INFRASTRUCTURE_PROVIDER=firebase (and the FIREBASE_* credentials) for production deployments.'
+    );
+  }
 
   const eventBus = new InMemoryEventBus();
   let customerRepo: ICustomerRepository;

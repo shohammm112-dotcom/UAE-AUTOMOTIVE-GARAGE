@@ -1,4 +1,6 @@
 import type { JobStage } from "../../domain/stateMachines/JobStateMachine.ts";
+import type { EstimateStatus } from "../../domain/stateMachines/EstimateStateMachine.ts";
+import type { ItemApprovalDecision } from "../../domain/entities/Estimate.ts";
 
 export interface CustomerResponseDto {
   readonly id: string;
@@ -107,7 +109,7 @@ export interface EstimateLineItemDto {
   readonly unitPriceDisplay: string;
   readonly lineTotalDisplay: string;
   readonly isMandatory: boolean;
-  readonly decision?: string;
+  readonly decision?: ItemApprovalDecision;
   readonly customerRejectionReason?: string;
 }
 
@@ -117,7 +119,7 @@ export interface EstimateResponseDto {
   readonly customerId: string;
   readonly version: number;
   readonly parentEstimateId?: string;
-  readonly status: string;
+  readonly status: EstimateStatus;
   readonly items: readonly EstimateLineItemDto[];
   readonly subtotalFils: number;
   readonly vatFils: number;

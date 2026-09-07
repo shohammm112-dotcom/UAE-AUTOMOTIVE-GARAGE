@@ -13,7 +13,10 @@ export const DashboardPage: React.FC = () => {
   const activeJobs = jobsData?.activeJobs || [];
   const vehicles = vehiclesData?.vehicles || [];
   const unreadNotifications = notificationsData?.notifications?.filter(n => !n.read) || [];
-  const upcomingAppointments = appointmentsData?.appointments?.filter(a => a.status === 'scheduled') || [];
+  const upcomingAppointments =
+    appointmentsData?.appointments?.filter(
+      (a) => a.status === 'requested' || a.status === 'confirmed'
+    ) || [];
 
   return (
     <div className="space-y-8">
