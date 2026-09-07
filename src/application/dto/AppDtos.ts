@@ -1,6 +1,11 @@
 import type { JobStage } from "../../domain/stateMachines/JobStateMachine.ts";
 import type { EstimateStatus } from "../../domain/stateMachines/EstimateStateMachine.ts";
 import type { ItemApprovalDecision } from "../../domain/entities/Estimate.ts";
+import type {
+  AppointmentDropoffType,
+  AppointmentTimeSlot,
+} from "../../domain/entities/Appointment.ts";
+import type { AppointmentStatus } from "../../domain/stateMachines/AppointmentStateMachine.ts";
 
 export interface CustomerResponseDto {
   readonly id: string;
@@ -53,8 +58,8 @@ export interface RequestAppointmentDto {
   readonly vehicleId?: string;
   readonly serviceType: string;
   readonly preferredDate: string;
-  readonly preferredTimeSlot: string;
-  readonly dropoffType: 'customer_dropoff' | 'flatbed_recovery';
+  readonly preferredTimeSlot: AppointmentTimeSlot;
+  readonly dropoffType: AppointmentDropoffType;
   readonly customerNotes?: string;
 }
 
@@ -64,10 +69,10 @@ export interface AppointmentResponseDto {
   readonly vehicleId?: string;
   readonly serviceType: string;
   readonly preferredDate: string;
-  readonly preferredTimeSlot: string;
-  readonly dropoffType: string;
+  readonly preferredTimeSlot: AppointmentTimeSlot;
+  readonly dropoffType: AppointmentDropoffType;
   readonly customerNotes: string;
-  readonly status: string;
+  readonly status: AppointmentStatus;
   readonly createdAt: string;
 }
 

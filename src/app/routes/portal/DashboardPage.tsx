@@ -1,6 +1,8 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { useApi } from "@/lib/api/hooks";
+import type { AppointmentResponseDto } from "@/application/dto/AppDtos";
+import { formatAppointmentSlot } from "@/lib/appointmentDisplay";
 import { Car, Wrench, FileText, Calendar, Clock, AlertCircle, CheckCircle2, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -8,7 +10,7 @@ export const DashboardPage: React.FC = () => {
   const { data: vehiclesData, isLoading: vehiclesLoading } = useApi<{ vehicles: any[] }>("/vehicles");
   const { data: jobsData, isLoading: jobsLoading } = useApi<{ activeJobs: any[], history: any[] }>("/jobs");
   const { data: notificationsData, isLoading: notifsLoading } = useApi<{ notifications: any[] }>("/notifications");
-  const { data: appointmentsData, isLoading: aptsLoading } = useApi<{ appointments: any[] }>("/appointments");
+  const { data: appointmentsData, isLoading: aptsLoading } = useApi<{ appointments: AppointmentResponseDto[] }>("/appointments");
 
   const activeJobs = jobsData?.activeJobs || [];
   const vehicles = vehiclesData?.vehicles || [];
@@ -133,9 +135,9 @@ export const DashboardPage: React.FC = () => {
               </div>
             ) : upcomingAppointments.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {upcomingAppointments.slice(0, 3).map((apt: any) => (
+                {upcomingAppointments.slice(0, 3).map((apt) => (
                   <div key={apt.id} className="p-4 bg-zinc-50 rounded-lg border border-zinc-100">
-                    <p className="font-medium text-zinc-900 mb-1">{new Date(apt.scheduledAt).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                    <p className="font-medium text-zinc-900 mb-1">{formatAppointmentSlot(apt.preferredDate, apt.preferredTimeSlot)}</p>
                     <p className="text-sm text-zinc-500 capitalize">{apt.serviceType.replace(/_/g, ' ')}</p>
                   </div>
                 ))}

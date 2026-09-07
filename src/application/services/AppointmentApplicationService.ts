@@ -6,10 +6,20 @@ import { AuthorizationGuard } from '../security/AuthorizationGuard.ts';
 import { AppointmentResponseDto, RequestAppointmentDto } from '../dto/AppDtos.ts';
 import { ResourceNotFoundError, ValidationFailedError } from '../errors/ApplicationError.ts';
 
+/** GST is fixed at UTC+4 for Asia/Dubai and has no daylight-saving time. */
+export function todayInGst(now: Date = new Date()): string {
+  const gstNow = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+  const year = gstNow.getUTCFullYear().toString().padStart(4, '0');
+  const month = (gstNow.getUTCMonth() + 1).toString().padStart(2, '0');
+  const day = gstNow.getUTCDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export class AppointmentApplicationService {
   constructor(
     private readonly appointmentRepo: IAppointmentRepository,
-    private readonly vehicleRepo: IVehicleRepository
+    private readonly vehicleRepo: IVehicleRepository,
+    private readonly clock: () => Date = () => new Date()
   ) {}
 
   public async requestAppointment(
@@ -19,6 +29,13 @@ export class AppointmentApplicationService {
     AuthorizationGuard.assertAuthenticated(context);
     if (!context.customerId) {
       throw new ValidationFailedError('CustomerId required to request appointment');
+    }
+
+    const today = todayInGst(this.clock());
+    if (dto.preferredDate < today) {
+      throw new ValidationFailedError(
+        `Preferred date cannot be in the past. Today in GST is ${today}`
+      );
     }
 
     if (dto.vehicleId) {
@@ -66,7 +83,7 @@ export class AppointmentApplicationService {
       throw new ResourceNotFoundError('Appointment', appointmentId);
     }
 
-    AuthorizationGuard.assertCustomerOwnsEntity(context, appointment.customerId, 'Appointment');
+    AuthorizationGuard.assertCustomerOnly(context, appointment.customerId, 'Appointment');
     appointment.cancel();
     await this.appointmentRepo.update(appointment);
     return this.toDto(appointment);
@@ -79,7 +96,12 @@ export class AppointmentApplicationService {
     context: AuthenticatedContext,
     appointmentId: string
   ): Promise<AppointmentResponseDto> {
-    AuthorizationGuard.assertStaffRole(context, ['advisor', 'workshop_manager', 'admin']);
+    AuthorizationGuard.assertStaffRole(context, [
+      'admin',
+      'workshop_manager',
+      'service_advisor',
+      'advisor',
+    ]);
 
     const appointment = await this.appointmentRepo.findById(appointmentId);
     if (!appointment) {
@@ -87,6 +109,28 @@ export class AppointmentApplicationService {
     }
 
     appointment.confirm();
+    await this.appointmentRepo.update(appointment);
+    return this.toDto(appointment);
+  }
+
+  /** Workshop commercial staff cancels an appointment. */
+  public async staffCancelAppointment(
+    context: AuthenticatedContext,
+    appointmentId: string
+  ): Promise<AppointmentResponseDto> {
+    AuthorizationGuard.assertStaffRole(context, [
+      'admin',
+      'workshop_manager',
+      'service_advisor',
+      'advisor',
+    ]);
+
+    const appointment = await this.appointmentRepo.findById(appointmentId);
+    if (!appointment) {
+      throw new ResourceNotFoundError('Appointment', appointmentId);
+    }
+
+    appointment.cancel();
     await this.appointmentRepo.update(appointment);
     return this.toDto(appointment);
   }

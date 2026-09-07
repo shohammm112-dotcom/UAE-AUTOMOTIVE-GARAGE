@@ -1,5 +1,12 @@
 import { Appointment } from '../../../domain/entities/Appointment.ts';
-import { AppointmentStatus } from '../../../domain/stateMachines/AppointmentStateMachine.ts';
+import {
+  isAppointmentStatus,
+} from '../../../domain/stateMachines/AppointmentStateMachine.ts';
+import {
+  isAppointmentDropoffType,
+  isAppointmentTimeSlot,
+} from '../../../domain/entities/Appointment.ts';
+import { InvariantViolationError } from '../../../domain/errors/DomainError.ts';
 
 export interface AppointmentFirestoreDocument {
   id: string;
@@ -8,7 +15,7 @@ export interface AppointmentFirestoreDocument {
   serviceType: string;
   preferredDate: string;
   preferredTimeSlot: string;
-  dropoffType: 'customer_dropoff' | 'flatbed_recovery';
+  dropoffType: string;
   customerNotes: string;
   status: string;
   createdAt: string;
@@ -33,6 +40,19 @@ export class AppointmentFirestoreMapper {
   }
 
   public static toDomain(doc: AppointmentFirestoreDocument): Appointment {
+    if (!isAppointmentStatus(doc.status)) {
+      throw new InvariantViolationError(`Persisted appointment has invalid status: ${String(doc.status)}`);
+    }
+    if (!isAppointmentTimeSlot(doc.preferredTimeSlot)) {
+      throw new InvariantViolationError(
+        `Persisted appointment has invalid preferred time slot: ${String(doc.preferredTimeSlot)}`
+      );
+    }
+    if (!isAppointmentDropoffType(doc.dropoffType)) {
+      throw new InvariantViolationError(
+        `Persisted appointment has invalid dropoff type: ${String(doc.dropoffType)}`
+      );
+    }
     return new Appointment({
       id: doc.id,
       customerId: doc.customerId,
@@ -42,7 +62,7 @@ export class AppointmentFirestoreMapper {
       preferredTimeSlot: doc.preferredTimeSlot,
       dropoffType: doc.dropoffType,
       customerNotes: doc.customerNotes,
-      status: doc.status as AppointmentStatus,
+      status: doc.status,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     });

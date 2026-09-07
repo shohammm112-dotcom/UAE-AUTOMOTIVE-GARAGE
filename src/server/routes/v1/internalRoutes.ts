@@ -53,6 +53,38 @@ export function createInternalRoutes(container: AppContainer): Router {
   });
 
   /**
+   * POST /api/v1/internal/appointments/:id/confirm
+   * Confirms an appointment slot.
+   */
+  router.post('/appointments/:id/confirm', authMiddleware.requireAuth(), commercialStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const appointment = await container.services.appointmentService.staffConfirmAppointment(
+        req.context!,
+        req.params.id
+      );
+      res.json({ appointment });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * POST /api/v1/internal/appointments/:id/cancel
+   * Cancels an appointment as commercial staff.
+   */
+  router.post('/appointments/:id/cancel', authMiddleware.requireAuth(), commercialStaffGuard, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const appointment = await container.services.appointmentService.staffCancelAppointment(
+        req.context!,
+        req.params.id
+      );
+      res.json({ appointment });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
    * POST /api/v1/internal/estimates
    * Workshop staff creates a draft estimate through EstimateApplicationService (SEC-HIGH-04).
    */

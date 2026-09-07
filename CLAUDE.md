@@ -10,16 +10,16 @@ Treat the repository itself as authoritative. Do not assume previous agent repor
 
 The current local `main` checkpoint is:
 
-- Commit message: `fix: harden authentication and restore estimate approval`
+- Commit message: `fix: harden appointment domain and authorization`
   (find it with `git log --oneline -1`)
-- Parent: `a099b7f` (`fix: close job lifecycle consistency across portals`), which
-  closed the Phase 5 job-lifecycle work.
-- This checkpoint carries the P0 authentication remediation and the P1 customer
-  estimate-approval remediation. Both were reproduced before being fixed and
-  adversarially re-tested afterwards.
-- Verification at this checkpoint: `npm test` 120/120 (exit 0), `npm run lint`
+- Parent: `6961bfe` (`docs: record verified Phase 6 discovery findings`).
+- This checkpoint carries Phase 6.1 — appointment domain hardening. The P0
+  (any staff role could cancel any customer's appointment) was reproduced over
+  the service layer before being fixed, and every fix was adversarially
+  re-tested afterwards.
+- Verification at this checkpoint: `npm test` 134/134 (exit 0), `npm run lint`
   exit 0, `npm run build` exit 0 with one pre-existing non-blocking Vite
-  chunk-size warning (~500 kB). See debt #15.
+  chunk-size warning (~501 kB). See debt #15.
 
 ### Current phase
 
@@ -27,10 +27,12 @@ Phase 5 — Workshop Execution — is CLOSED. Phases 0-4 (governance, public
 website, customer portal, commercial core, staff/workshop foundation) are
 landed.
 
-Phase 6 (Appointments / Scheduling) has NOT been started. It is awaiting
-discovery and human review, and must not be started implicitly. No Phase 6
-migration, UI, API or architectural commitment may be created before that
-review.
+Phase 6.1 — Appointment Domain Hardening — is CLOSED (this checkpoint).
+
+Phase 6.2 (Staff Appointment Operations) has NOT been started and must not be
+started implicitly. Phase 6.1 deliberately shipped only the foundation: no
+capacity model, no calendar/scheduling UI, no notifications, no reschedule, and
+no appointment-to-Job creation.
 
 Note on phase numbering: the delivery plan uses numeric phases 0-9. The
 "Proposed Forward Roadmap" section further down uses an older lettered A-H
@@ -600,6 +602,69 @@ real stages (`inspection_in_progress`, `repair_in_progress`, `quality_control`),
 so the customer timeline highlighted no current step and suppressed the
 inspection report download for customers whose jobs were mid-repair.
 
+### Step 6.1 — Appointment Domain Hardening
+
+Closes the appointment foundation: domain-correct, type-safe, validated, secured,
+tested. Deliberately NOT a scheduling system.
+
+Delivered:
+
+1. **P0 authorization.** `cancelAppointment` moved from
+   `assertCustomerOwnsEntity` (which early-returns for staff) to the existing
+   `assertCustomerOnly`. Reproduced before fixing; see resolved debt #30.
+2. **Staff routes.** `POST /internal/appointments/:id/confirm` and `.../cancel`
+   behind `commercialStaffGuard`. Resolves debt #34; the service role list now
+   includes `service_advisor`.
+3. **Type safety.** `AppointmentResponseDto.status`/`dropoffType`/
+   `preferredTimeSlot` narrowed to domain unions, and — the load-bearing half —
+   both portal pages typed as `AppointmentResponseDto[]` instead of `any[]`.
+4. **Validation, split deliberately.** Structural checks (real `YYYY-MM-DD`
+   calendar date, valid slot, valid dropoff) live in the entity constructor;
+   the past-date policy lives ONLY in `requestAppointment`. This split matters:
+   `AppointmentFirestoreMapper.toDomain` rehydrates historical appointments
+   through that same constructor, so a past-date throw there would make every
+   completed appointment unreadable. A regression test pins this.
+5. **I/O boundary guards.** The mapper's unchecked `doc.status as
+   AppointmentStatus` cast is replaced by `isAppointmentStatus` /
+   `isAppointmentTimeSlot` / `isAppointmentDropoffType`. This is the appointment
+   twin of debt #7/#25.
+6. **Time model** (see "Appointment Time Model" below).
+7. **14 regression tests**, 120 -> 134.
+
+Verification: `npm test` 134/134, `npm run lint` exit 0, `npm run build` exit 0
+(pre-existing ~501 kB chunk warning, debt #15). A 31-check adversarial script
+replayed every pre-fix attack and all are now blocked. Browser-verified with
+Playwright: no "Invalid Date", correct date/slot rendering on both surfaces,
+Cancel shown only for non-terminal appointments.
+
+Delegation note: the backend was implemented by the local `codex` CLI and the
+frontend by the lead. The `hivemind` `codex_task`/`antigravity_task` MCP tools
+CANNOT be used for write work — they spawn the CLIs with no approval flags, so
+the child blocks on an interactive prompt forever at 0% CPU while appearing to
+work. Drive `codex exec --approve-for-me` directly instead.
+
+## Appointment Time Model (recorded 2026-09-07)
+
+Explicit, because Phase 6.2+ scheduling depends on it:
+
+- **Timezone assumption**: GST / Asia/Dubai, treated as a FIXED UTC+4 offset.
+  The UAE observes no daylight saving. `todayInGst(now)` in
+  `AppointmentApplicationService.ts` is the single implementation and takes an
+  injectable clock so tests are deterministic.
+- **Date representation**: `preferredDate` is a bare `YYYY-MM-DD` calendar day,
+  NOT an instant. The UI parses it as UTC when formatting so the rendered day
+  never shifts by one in a negative-offset timezone.
+- **Time representation**: `preferredTimeSlot` is a coarse enum
+  (`morning` | `afternoon` | `evening`), not a clock time. There is deliberately
+  no start/end time, because there is no capacity model yet.
+- **Validation rules**: structural validity is a domain invariant; "not in the
+  past (GST)" is an application policy applied only at request time. Today is
+  allowed — a walk-in garage needs same-day booking.
+
+When a real capacity model arrives, the slot enum is the thing that will need to
+grow into concrete time ranges. Nothing persists a clock time today, so that
+change will not require a data migration.
+
 ## Known Technical Debt / Drift Risks
 
 These items are known and should not be silently fixed during unrelated work:
@@ -771,38 +836,46 @@ Open items, highest value first:
 
 ### Discovered during Phase 6 discovery (six-agent audit, HEAD 7074803)
 
-These are VERIFIED findings from the appointment-domain audit. None were fixed —
-Phase 6 is not authorised to begin. Several are live bugs in shipped code and
-are NOT Phase 6 feature work; they are pre-existing defects that discovery
-surfaced.
+These were VERIFIED findings from the appointment-domain audit. Items #27-#30,
+#34 and #39 were FIXED in Phase 6.1 (see "Step 6.1" in the step history). The
+rest remain open.
 
-LIVE BUGS (shipping today):
+LIVE BUGS (all RESOLVED in Phase 6.1):
 
-27. **Every appointment renders "Invalid Date".** `AppointmentsPage.tsx:185,188`
-    and `DashboardPage.tsx:138` read `apt.scheduledAt`. That field does not exist
-    anywhere in the backend — the DTO carries `preferredDate` and
-    `preferredTimeSlot`. `new Date(undefined)` is `Invalid Date`, so both
-    surfaces where a customer checks when their car is due are unreadable.
-    Independently found by three agents and confirmed by direct grep. Same
-    defect class as debt #4, different field.
-28. **Appointment notes never display.** `AppointmentsPage.tsx:202` reads
-    `apt.notes`; the DTO field is `customerNotes`.
-29. **`AppointmentResponseDto.status` is a bare `string`** (`AppDtos.ts:70`),
-    not `AppointmentStatus`. This is why #27/#28 and the `'scheduled'` literals
-    fixed in Step 5.7 were invisible to `tsc`. Both appointment pages also use
-    `useApi<{ appointments: any[] }>`, the twin of debt #8. The Step 5.7 drift
-    guard catches `.status === 'literal'` comparisons but NOT property reads of
-    fields that do not exist — that gap is how #27 survived.
+27. RESOLVED — "Invalid Date" is gone. `AppointmentsPage.tsx` and
+    `DashboardPage.tsx` read `apt.scheduledAt`, a field that exists nowhere in
+    the backend, so `new Date(undefined)` rendered `Invalid Date` on both
+    surfaces where a customer checks when their car is due. Both now render
+    `preferredDate` + `preferredTimeSlot` through
+    `src/lib/appointmentDisplay.ts`. Verified in a real browser.
+28. RESOLVED — `apt.notes` -> `apt.customerNotes`. Notes now display.
+29. RESOLVED — `AppointmentResponseDto.status` is now `AppointmentStatus`, and
+    `dropoffType`/`preferredTimeSlot` are narrowed too. Crucially both pages now
+    use `useApi<{ appointments: AppointmentResponseDto[] }>` instead of `any[]`;
+    without that the DTO narrowing is inert (the same lesson as Step 5.6 item 4
+    and debt #8). **Proven load-bearing**: re-injecting `apt.scheduledAt` and
+    `apt.notes` produces TS2339 and `tsc` exits 2.
 
 SECURITY (least-privilege, pre-existing, NOT introduced by Step 5.7):
 
-30. **Any authenticated staff member — including `technician` and `mechanic` —
-    can cancel ANY customer's appointment.** `appointmentRoutes.ts:47` mounts
-    only `requireAuth()` with no role guard, and
+30. RESOLVED (P0, Phase 6.1) — any authenticated staff member, `technician` and
+    `mechanic` included, could cancel ANY customer's appointment, because
     `AuthorizationGuard.assertCustomerOwnsEntity` early-returns for
-    `actorType === 'staff'` (`AuthorizationGuard.ts:24`). Proven empirically over
-    HTTP: technician, mechanic and advisor tokens each returned 200 and the
-    appointment moved to `cancelled`.
+    `actorType === 'staff'` (`AuthorizationGuard.ts:24`) and
+    `appointmentRoutes.ts` mounted only `requireAuth()`. **Reproduced before the
+    fix** over the service layer: technician and mechanic both moved a stranger's
+    appointment to `cancelled`.
+
+    Fix: `cancelAppointment` now uses the pre-existing
+    `AuthorizationGuard.assertCustomerOnly` (`AuthorizationGuard.ts:42`, already
+    proven at `EstimateApplicationService.ts:157`), so the customer route is
+    customer-only and staff are strictly forbidden on it. Staff keep a
+    legitimate path via the new explicitly-guarded `/internal/appointments/:id/cancel`.
+    `assertCustomerOwnsEntity` itself was deliberately NOT changed — ~14 call
+    sites in unrelated features; that is debt #32.
+
+    Re-verified after the fix: all six staff roles blocked on the customer route,
+    another customer blocked, the owner still allowed.
 31. **Same guard, same shape: any staff member can rewrite any customer's
     odometer.** `PATCH /api/v1/vehicles/:id/mileage` (`vehicleRoutes.ts:65`,
     `requireAuth()` only) reaches `VehicleApplicationService.ts:85`, which uses
@@ -819,14 +892,16 @@ SECURITY (least-privilege, pre-existing, NOT introduced by Step 5.7):
 
 FUNCTIONAL GAPS (genuine Phase 6 scope):
 
-34. **No appointment can ever be confirmed.** `staffConfirmAppointment` exists
-    (`AppointmentApplicationService.ts:78-92`) but NO route reaches it, and
-    `internalRoutes.ts` has zero appointment endpoints. So `requested ->
-    confirmed` is unreachable in production; every appointment is permanently
-    `requested` or `cancelled`. Its inline role list
-    `['advisor','workshop_manager','admin']` also omits `service_advisor`,
-    matching neither canonical guard — an instance of debt #12 producing a real
-    behavioural inconsistency.
+34. RESOLVED (Phase 6.1) — `staffConfirmAppointment` existed but no route reached
+    it, so `requested -> confirmed` was unreachable and every appointment was
+    permanently `requested` or `cancelled`. Its inline role list also omitted
+    `service_advisor`, matching neither canonical guard.
+
+    Fix: `POST /api/v1/internal/appointments/:id/confirm` and `.../cancel` are
+    now mounted in `internalRoutes.ts` behind the existing `commercialStaffGuard`
+    (`admin`, `workshop_manager`, `service_advisor`, `advisor`), and the service
+    role list was corrected to match. Verified: `service_advisor` can now confirm;
+    `technician`/`mechanic` get 403.
 35. **`Appointment.complete()` and `markNoShow()` have zero callers.** Four of
     the five `AppointmentStatus` values are unreachable at runtime.
 36. **There is no job-creation path anywhere in the application.** No service or
@@ -843,15 +918,41 @@ FUNCTIONAL GAPS (genuine Phase 6 scope):
     unconditional last-write-wins `set()`. Two customers can silently book the
     same slot. The transactional lock-document pattern already proven in
     `FirestoreApprovalRepository` is not applied here.
-39. **`preferredTimeSlot` has three disagreeing vocabularies**: the entity
-    comments `"09:00 - 11:00"`, the UI sends `"Morning"/"Afternoon"/"Evening"`,
-    and the dead `types/api.ts` declares `'morning' | 'afternoon'`. No format
-    validation exists at any layer. Choosing the canonical vocabulary AFTER real
-    bookings exist would force a migration with no reliable mapping.
-40. **Appointment test coverage is one state-machine unit test**
-    (`stateMachines.test.ts:53-63`). No entity, service, route, repository,
-    ownership or concurrency tests. Findings #30 and #34 are invisible to
-    `npm test`.
+39. RESOLVED (Phase 6.1) — `preferredTimeSlot` had three disagreeing
+    vocabularies (entity comment `"09:00 - 11:00"`, UI sending
+    `"Morning"/"Afternoon"/"Evening"`, dead `types/api.ts` declaring
+    `'morning' | 'afternoon'`) and no validation at any layer. The canonical
+    vocabulary is now `AppointmentTimeSlot = 'morning' | 'afternoon' | 'evening'`,
+    validated in the entity and at the Firestore boundary. Display labels live
+    once in `src/lib/appointmentDisplay.ts`. Settled before real bookings exist,
+    so no migration is needed.
+40. RESOLVED (Phase 6.1) — appointment coverage was a single state-machine unit
+    test. `src/tests/appointmentDomainIntegrity.test.ts` now adds 14 tests
+    covering validation, ownership, staff RBAC, lifecycle, terminal states and
+    mapper guards. Suite went 120 -> 134. Each new guard was reverted one at a
+    time to confirm its test actually fails against the pre-fix behaviour.
+
+### Discovered during Phase 6.1 (verified, deliberately NOT fixed — out of scope)
+
+41. **The rate limiter is mounted globally, ahead of the Vite dev middleware.**
+    `src/server/app.ts:25` applies `rateLimiterMiddleware` to the whole app, and
+    `server.ts` mounts `vite.middlewares` after it. In dev, Vite serves hundreds
+    of individual ES modules over HTTP, so ONE page load exhausts the 120 req/min
+    bucket and the SPA fails to boot at all — every module request returns 429
+    and the page renders blank. Proven with Playwright: the appointments page
+    produced an empty `<body>` and zero buttons until the limit was temporarily
+    raised. The limiter should be scoped to `/api` (or the Vite branch mounted
+    ahead of it). Related to debt #20, which is the production half of the same
+    middleware being under-specified.
+42. **There is no customer-creation path anywhere in the application.** No route
+    creates a `Customer`; `GET /customers/profile` 404s for a valid mock token
+    and nothing provisions one. Mock repositories start empty, so a fresh
+    instance can never have a customer, and therefore never a vehicle or an
+    appointment. This makes true end-to-end browser testing of the customer
+    journey impossible without direct repository seeding — Phase 6.1's browser
+    verification had to stub the API at the network layer for that reason. This
+    is the sibling of debt #36 (no job-creation path) and should be triaged with
+    it: the product has no onboarding.
 
 Do not bundle these into unrelated feature work without explicit scope.
 

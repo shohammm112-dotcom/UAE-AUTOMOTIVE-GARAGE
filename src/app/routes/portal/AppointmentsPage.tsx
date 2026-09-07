@@ -4,9 +4,16 @@ import { ApiClient } from "@/lib/api/client";
 import { Calendar, Plus, AlertCircle, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppointmentStateMachine } from "@/domain/stateMachines/AppointmentStateMachine";
+import type { AppointmentResponseDto } from "@/application/dto/AppDtos";
+import {
+  APPOINTMENT_TIME_SLOTS,
+  TIME_SLOT_LABELS,
+  formatPreferredDate,
+  type AppointmentTimeSlot,
+} from "@/lib/appointmentDisplay";
 
 export const AppointmentsPage: React.FC = () => {
-  const { data, isLoading, error, refetch } = useApi<{ appointments: any[] }>("/appointments");
+  const { data, isLoading, error, refetch } = useApi<{ appointments: AppointmentResponseDto[] }>("/appointments");
   const { data: vehiclesData } = useApi<{ vehicles: any[] }>("/vehicles");
   
   const appointments = data?.appointments || [];
@@ -20,7 +27,7 @@ export const AppointmentsPage: React.FC = () => {
     vehicleId: "",
     serviceType: "Maintenance",
     preferredDate: "",
-    preferredTimeSlot: "Morning",
+    preferredTimeSlot: "morning" as AppointmentTimeSlot,
     dropoffType: "customer_dropoff",
     customerNotes: ""
   });
@@ -140,12 +147,12 @@ export const AppointmentsPage: React.FC = () => {
                 <select 
                   required
                   value={formData.preferredTimeSlot}
-                  onChange={(e) => setFormData({...formData, preferredTimeSlot: e.target.value})}
+                  onChange={(e) => setFormData({...formData, preferredTimeSlot: e.target.value as AppointmentTimeSlot})}
                   className="w-full px-3 py-2 border border-zinc-300 rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-500 bg-white"
                 >
-                  <option value="Morning">Morning (8AM - 12PM)</option>
-                  <option value="Afternoon">Afternoon (12PM - 4PM)</option>
-                  <option value="Evening">Evening (4PM - 7PM)</option>
+                  {APPOINTMENT_TIME_SLOTS.map((slot) => (
+                    <option key={slot} value={slot}>{TIME_SLOT_LABELS[slot]}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -177,15 +184,15 @@ export const AppointmentsPage: React.FC = () => {
         </div>
       ) : appointments.length > 0 ? (
         <div className="space-y-4">
-          {appointments.map((apt: any) => (
+          {appointments.map((apt) => (
             <div key={apt.id} className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden flex flex-col sm:flex-row">
               <div className="bg-zinc-50 border-r border-zinc-100 p-6 flex flex-col items-center justify-center sm:w-48 text-center shrink-0">
                 <Calendar className="w-6 h-6 text-zinc-400 mb-2" />
                 <p className="font-semibold text-zinc-900">
-                  {new Date(apt.scheduledAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {formatPreferredDate(apt.preferredDate)}
                 </p>
                 <p className="text-sm text-zinc-500">
-                  {new Date(apt.scheduledAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                  {TIME_SLOT_LABELS[apt.preferredTimeSlot] ?? apt.preferredTimeSlot}
                 </p>
               </div>
               <div className="p-6 flex-1 flex flex-col justify-center">
@@ -199,7 +206,7 @@ export const AppointmentsPage: React.FC = () => {
                       {String(apt.status).replace(/_/g, ' ')}
                     </span>
                     <h3 className="font-medium text-zinc-900 mb-1">{apt.serviceType?.replace(/_/g, ' ') || 'General Service'}</h3>
-                    {apt.notes && <p className="text-sm text-zinc-500 line-clamp-2">{apt.notes}</p>}
+                    {apt.customerNotes && <p className="text-sm text-zinc-500 line-clamp-2">{apt.customerNotes}</p>}
                   </div>
                   {AppointmentStateMachine.canTransition(apt.status, 'cancelled') && (
                     <Button variant="outline" size="sm" onClick={() => handleCancel(apt.id)} className="text-red-600 hover:text-red-700 hover:bg-red-50">
