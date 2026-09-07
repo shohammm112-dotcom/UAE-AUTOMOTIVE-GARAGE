@@ -22,7 +22,13 @@ export function createExpressApp(container: AppContainer): Express {
   const security = createSecurityMiddleware();
   app.use(security.helmetMiddleware);
   app.use(security.corsMiddleware);
-  app.use(security.rateLimiterMiddleware);
+
+  // Scoped to /api deliberately. Mounted globally it also metered every static and Vite dev
+  // module request: in development Vite serves each module over HTTP, so a single page load
+  // burned the 120 req/min budget and the SPA rendered blank with dozens of 429s. The limiter
+  // exists to protect the API from abuse, and it still covers every API route — including
+  // /api/health, which is inside this prefix.
+  app.use('/api', security.rateLimiterMiddleware);
 
   // Request body parsing with safe payload limits
   app.use(express.json({ limit: '1mb' }));

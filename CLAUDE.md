@@ -1014,7 +1014,7 @@ FUNCTIONAL GAPS (genuine Phase 6 scope):
 
 ### Discovered during Phase 6.1 (verified, deliberately NOT fixed — out of scope)
 
-41. **The rate limiter is mounted globally, ahead of the Vite dev middleware.**
+41. RESOLVED (demo prep) — the rate limiter was mounted globally, ahead of the Vite dev middleware.
     `src/server/app.ts:25` applies `rateLimiterMiddleware` to the whole app, and
     `server.ts` mounts `vite.middlewares` after it. In dev, Vite serves hundreds
     of individual ES modules over HTTP, so ONE page load exhausts the 120 req/min
@@ -1024,6 +1024,13 @@ FUNCTIONAL GAPS (genuine Phase 6 scope):
     raised. The limiter should be scoped to `/api` (or the Vite branch mounted
     ahead of it). Related to debt #20, which is the production half of the same
     middleware being under-specified.
+
+    FIXED in demo prep: `app.use('/api', security.rateLimiterMiddleware)` in
+    `src/server/app.ts`. Verified both directions — a 477-request browsing session
+    now produces zero 429s and every page renders, while 130 rapid calls to
+    `/api/health` still yield 80x200 then 50x429. NOTE: no automated test covers
+    this; the suite's Express app has no static or Vite routes, so a regression
+    would only surface in a browser.
 42. **CORRECTED — customer creation exists but the frontend never calls it.** An
     earlier revision of this entry claimed no customer-creation path existed
     anywhere. That was WRONG, and the error came from generalising a single 404.
